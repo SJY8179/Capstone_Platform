@@ -14,6 +14,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
+import jakarta.validation.Valid;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,9 +30,9 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
 
     @PostMapping("/register")
-    public AuthResponse register(@RequestBody RegisterRequest req) {
-        if (userRepository.findByEmail(req.email()).isPresent()) {
-            throw new IllegalArgumentException("Email already used");
+    public AuthResponse register(@Valid @RequestBody RegisterRequest req) {
+        if (userRepository.existsByEmail(req.email())) {
+            throw new IllegalArgumentException("Email already exists");
         }
         UserAccount u = UserAccount.builder()
                 .name(req.name())
@@ -44,7 +45,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@RequestBody LoginRequest req,
+    public AuthResponse login(@Valid @RequestBody LoginRequest req,
                               HttpServletRequest request,
                               HttpServletResponse response) {
         Authentication auth = authenticationManager.authenticate(

@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.*;
@@ -7,10 +8,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class CorsConfig {
+    
+    @Value("${app.client.origin}")
+    private String clientOrigin;
+    
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.addAllowedOrigin("http://localhost:5173");
+        cfg.addAllowedOrigin(clientOrigin);
         cfg.addAllowedMethod("GET");
         cfg.addAllowedMethod("POST");
         cfg.addAllowedMethod("PUT");
