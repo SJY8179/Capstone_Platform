@@ -45,7 +45,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         name: me.name,
         email: me.email,
         role: (me.role ?? "student") as UserRole,
-        avatar: me.avatarUrl ?? null,
+        avatarUrl: me.avatarUrl ?? null,
       });
       toast.success("로그인되었습니다.");
     } catch (err: any) {
@@ -97,7 +97,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         name: me.name,
         email: me.email,
         role: (me.role ?? "student") as UserRole,
-        avatar: me.avatarUrl ?? null,
+        avatarUrl: me.avatarUrl ?? null,
       });
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || "회원가입에 실패했습니다.";

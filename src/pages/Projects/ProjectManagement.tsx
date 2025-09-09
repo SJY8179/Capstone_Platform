@@ -1,10 +1,6 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,21 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
-  Search,
-  Plus,
-  FileText,
-  CalendarDays,
-  Users,
-  GitBranch,
-  Eye,
-  Edit,
-  MessageSquare,
+  Search, Plus, FileText, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
 } from "lucide-react";
-import { UserRole } from "@/App";
+import type { UserRole, User } from "@/types/user";
 import { listProjects } from "@/api/projects";
 import type { ProjectListDto, ProjectStatus } from "@/types/domain";
+import { useAuth } from "@/stores/auth";
 
-/** 상태 → 라벨 매핑 (예시 화면 텍스트) */
+/** 상태 -> 라벨 매핑 */
 const STATUS_LABEL: Record<ProjectStatus, string> = {
   "in-progress": "진행중",
   review: "검토중",
@@ -47,7 +36,15 @@ interface ProjectManagementProps {
   userRole: UserRole;
 }
 
+/** (참고용) 내 프로젝트 판정 – 지금은 서버에서 이미 필터된 목록을 쓰므로 사용 안 함 */
+function isMyProject(_p: ProjectListDto, _me?: User | null): boolean {
+  return true;
+}
+
 export function ProjectManagement({ userRole }: ProjectManagementProps) {
+  const { user } = useAuth();
+  const isAdmin = (user?.role ?? userRole) === "admin";
+
   const [searchQuery, setSearchQuery] = useState("");
   const [tab, setTab] = useState<ProjectStatus | "all">("all");
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
@@ -57,28 +54,31 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     (async () => {
       try {
         setLoading(true);
-        const data = await listProjects();
+        // 관리자면 전체(/projects), 그 외는 내 목록(/projects/my) + 필요 시 보강
+        const data = await listProjects({ isAdmin });
         setProjects(data ?? []);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isAdmin]);
 
-  /** 검색/탭 필터 + 최근 업데이트 순 정렬 */
+  /** 탭/검색 2차 필터 + 최근 업데이트 정렬 */
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
     const byTab = (p: ProjectListDto) => (tab === "all" ? true : p.status === tab);
-    const bySearch = (p: ProjectListDto) =>
-      p.name.toLowerCase().includes(q) ||
-      p.team.toLowerCase().includes(q) ||
-      p.members.some((m) => m.name.toLowerCase().includes(q));
+    const bySearch = (p: ProjectListDto) => {
+      const team = (p.team ?? "").toLowerCase();
+      const name = (p.name ?? "").toLowerCase();
+      const memberNames = (p.members ?? []).map((m) => (m?.name ?? "").toLowerCase());
+      return name.includes(q) || team.includes(q) || memberNames.some((n) => n.includes(q));
+    };
 
     const sorted = [...projects].sort((a, b) => {
       const ta = a.lastUpdate ?? "";
       const tb = b.lastUpdate ?? "";
-      return tb.localeCompare(ta); // 최신 업데이트 우선
+      return tb.localeCompare(ta);
     });
 
     return sorted.filter(byTab).filter(bySearch);
@@ -131,7 +131,9 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">프로젝트 관리</h1>
-          <p className="text-muted-foreground">참여 중인 프로젝트를 관리하세요.</p>
+          <p className="text-muted-foreground">
+            {isAdmin ? "전체 프로젝트를 관리하세요." : "참여 중인 프로젝트를 관리하세요."}
+          </p>
         </div>
         {userRole === "student" && (
           <Button>
@@ -172,6 +174,12 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <div className="space-y-4">
             {filtered.map((p) => {
               const progress = Math.max(0, Math.min(100, p.progress ?? 0));
+              const msCompleted = p.milestones?.completed ?? 0;
+              const msTotal = p.milestones?.total ?? 0;
+              const nextTask = p.nextDeadline?.task ?? null;
+              const nextDate = p.nextDeadline?.date ?? null;
+              const teamName = p.team ?? "N/A";
+
               return (
                 <Card key={p.id}>
                   {/* 상단: 제목 / 상태 / 설명 / 소속팀·업데이트 / 우측 액션 */}
@@ -184,18 +192,16 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
                         </Badge>
                       </CardTitle>
 
-                      {/* (예시처럼) 한 줄 설명이 있으면 바로 아래에 노출 */}
                       {p.description && (
                         <CardDescription className="text-sm">
                           {p.description}
                         </CardDescription>
                       )}
 
-                      {/* 소속 팀 · 최근 업데이트 (아이콘과 함께) */}
                       <CardDescription className="text-sm">
                         <span className="inline-flex items-center gap-1 mr-3">
                           <Users className="h-4 w-4" />
-                          {p.team}
+                          {teamName}
                         </span>
                         <span className="inline-flex items-center gap-1">
                           <CalendarDays className="h-4 w-4" />
@@ -207,7 +213,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
                     {renderActions(p)}
                   </CardHeader>
 
-                  {/* 진행률 구간 (좌측 라벨/우측 % · 긴 바) */}
+                  {/* 진행률 */}
                   <CardContent className="space-y-3">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">프로젝트 진행률</span>
@@ -215,19 +221,16 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
                     </div>
                     <Progress value={progress} className="h-2" />
 
-                    {/* 하단 정보 라인: 마일스톤 pill · 다음 마감 · 팀원 */}
+                    {/* 하단 정보 */}
                     <div className="flex flex-wrap items-center gap-3 text-sm">
-                      <Badge
-                        variant="secondary"
-                        className="rounded-full px-2 py-0.5 text-xs"
-                      >
-                        마일스톤 {p.milestones.completed}/{p.milestones.total}
+                      <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-xs">
+                        마일스톤 {msCompleted}/{msTotal}
                       </Badge>
 
-                      {p.nextDeadline ? (
+                      {nextTask && nextDate ? (
                         <span className="inline-flex items-center gap-1 text-muted-foreground">
                           <CalendarDays className="h-4 w-4" />
-                          다음 마감: {p.nextDeadline.task} · {formatK(p.nextDeadline.date)}
+                          다음 마감: {nextTask} · {formatK(nextDate)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">다음 마감 없음</span>
@@ -235,7 +238,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
                       <span className="inline-flex items-center gap-1 text-muted-foreground">
                         <Users className="h-4 w-4" />
-                        팀원: {p.members.map((m) => m.name).join(", ") || "-"}
+                        팀원: {(p.members ?? []).map((m) => m.name).join(", ") || "-"}
                       </span>
                     </div>
                   </CardContent>

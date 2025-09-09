@@ -10,11 +10,20 @@ import {
   MessageSquare,
   ClipboardCheck,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  Plus
 } from 'lucide-react';
 import { listProjects } from '@/api/projects';
 import { listTeams } from '@/api/teams';
 import type { ProjectListDto, TeamListDto } from '@/types/domain';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 // Text constants for localization/encoding issue prevention
 const TEXTS = {
@@ -44,6 +53,7 @@ const TEXTS = {
   statusGraded: '채점 완료',
   reviewButton: '검토',
   viewButton: '보기',
+  newSchedule: '새 일정'
 };
 
 interface ProfessorDashboardProps {
@@ -55,6 +65,7 @@ export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboar
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -87,6 +98,18 @@ export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboar
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">{TEXTS.headerTitle}</h2>
+          <p className="text-muted-foreground">{TEXTS.headerDescription}</p>
+        </div>
+        {/* 새 일정 버튼: 담당 프로젝트가 없는 경우에도 항상 노출, 미소속이면 안내 다이얼로그 */}
+        <Button size="sm" onClick={() => (projectId ? /* 실제 에디터는 교수 권한 기획 후 연결 */ null : setNeedProjectOpen(true))}>
+          <Plus className="h-4 w-4 mr-2" />
+          {TEXTS.newSchedule}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
@@ -185,6 +208,23 @@ export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboar
           </div>
         </CardContent>
       </Card>
+
+      {/* 안내 다이얼로그: 담당/참여 프로젝트가 없을 때 */}
+      {!projectId && (
+        <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>프로젝트 연결 필요</DialogTitle>
+              <DialogDescription>
+                새 일정을 추가하려면 먼저 담당하거나 참여 중인 프로젝트가 필요합니다.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>확인</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

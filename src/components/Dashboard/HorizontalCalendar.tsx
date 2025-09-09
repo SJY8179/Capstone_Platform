@@ -12,10 +12,18 @@ import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules"
 import type { ScheduleDto, ScheduleType, SchedulePriority, EventType } from "@/types/domain";
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { scheduleBus } from "@/lib/schedule-bus";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 interface HorizontalCalendarProps {
   className?: string;
-  /** 프로젝트 없으면 API 호출 스킵하고 N/A 플레이스홀더 */
+  /** 프로젝트 없으면 API 호출은 스킵하지만, 캘린더 그리드는 항상 렌더 */
   projectId?: number;
 }
 
@@ -60,6 +68,9 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     type: EventType;
     location?: string;
   } | undefined>(undefined);
+
+  // 프로젝트 필요 안내
+  const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
   const today = new Date();
 
@@ -149,6 +160,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
 
   /** 데이터 로딩 */
   const reload = async () => {
+    // ✅ projectId가 없어도 캘린더 그리드는 렌더하므로, 이벤트만 빈 배열 유지
     if (!projectId) {
       setEvents([]);
       return;
@@ -239,8 +251,12 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     return date.getMonth() === ref.getMonth() && date.getFullYear() === ref.getFullYear();
   };
 
-  /** 일정 추가 버튼 → 모달 열기 */
+  /** 일정 추가 버튼 → 모달/안내 */
   const onClickAdd = () => {
+    if (!projectId) {
+      setNeedProjectOpen(true);
+      return;
+    }
     const base = selectedDate ? new Date(selectedDate) : new Date(fetchRange.from);
     const start = new Date(base);
     start.setHours(10, 0, 0, 0);
@@ -302,115 +318,109 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         </CardHeader>
 
         <CardContent>
-          {/* 여기는 App 가드 덕에 projectId 없는 상태로 렌더링되지 않지만,
-              혹시라도 대비해 플레이스홀더 처리 */}
-          {!projectId ? (
-            <div className="text-center py-16 text-sm text-muted-foreground">
-              참여 중인 프로젝트가 없어서 일정을 표시할 수 없습니다.
-            </div>
-          ) : (
-            <>
-              {/* 요일 헤더 */}
-              <div className="grid grid-cols-7 gap-1 mb-4">
-                {DAY_LABELS.map((day, idx) => (
-                  <div
-                    key={day}
-                    className={`text-center py-2 text-sm font-medium ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
-                      }`}
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* 날짜 그리드 */}
-              <div
-                className={`grid grid-cols-7 gap-2 ${isExpanded ? "grid-rows-6" : "grid-rows-1"
+          {/* ✅ projectId 없어도 캘린더 그리드 렌더 */}
+          <>
+            {/* 요일 헤더 */}
+            <div className="grid grid-cols-7 gap-1 mb-4">
+              {DAY_LABELS.map((day, idx) => (
+                <div
+                  key={day}
+                  className={`text-center py-2 text-sm font-medium ${
+                    idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
                   }`}
-              >
-                {displayDays.map((date) => {
-                  const dayEvents = getEventsForDate(date);
-                  const key = toYMD(date);
-                  const inCurrentMonth = isCurrentMonth(date);
-                  const maxEvents = isExpanded ? 4 : 2;
-                  const minHeight = isExpanded ? "min-h-[150px]" : "min-h-[120px]";
-
-                  return (
-                    <div
-                      key={key}
-                      className={`
-                        ${minHeight} p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md
-                        ${isToday(date) ? "bg-primary/5 border-primary" : "border-border hover:border-primary/50"}
-                        ${isSelected(date) ? "ring-2 ring-primary ring-offset-2" : ""}
-                        ${!inCurrentMonth ? "opacity-50 bg-muted/20" : ""}
-                      `}
-                      onClick={() => setSelectedDate(key)}
-                    >
-                      <div
-                        className={`text-center mb-3 ${isToday(date)
-                            ? "font-bold text-primary"
-                            : inCurrentMonth
-                              ? ""
-                              : "text-muted-foreground"
-                          }`}
-                      >
-                        <span className="text-lg">{date.getDate()}</span>
-                      </div>
-
-                      <div className="space-y-1">
-                        {dayEvents.slice(0, maxEvents).map((event) => (
-                          <div
-                            key={event.id}
-                            className="text-xs p-1.5 rounded bg-muted/50 hover:bg-muted transition-colors"
-                          >
-                            <div className="flex items-center gap-1 mb-1">
-                              {getTypeIcon(event.type, "h-2 w-2")}
-                              <span className="truncate font-medium">{event.title}</span>
-                            </div>
-                            {isExpanded && event.time && (
-                              <div className="text-muted-foreground flex items-center gap-1">
-                                <Clock className="h-2 w-2" />
-                                <span>{event.time}</span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-
-                        {dayEvents.length > maxEvents && (
-                          <div className="text-xs text-muted-foreground text-center py-1 font-medium">
-                            +{dayEvents.length - maxEvents}개 더 보기
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* 접기/펼치기 */}
-              <div className="flex justify-center mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsExpanded((v) => !v)}
-                  className="flex items-center gap-2"
-                  disabled={loading}
                 >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="h-4 w-4" />
-                      주간 보기로 접기
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-4 w-4" />
-                      월간 보기로 펼치기
-                    </>
-                  )}
-                </Button>
-              </div>
-            </>
-          )}
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* 날짜 그리드 */}
+            <div
+              className={`grid grid-cols-7 gap-2 ${isExpanded ? "grid-rows-6" : "grid-rows-1"}`}
+            >
+              {displayDays.map((date) => {
+                const dayEvents = getEventsForDate(date);
+                const key = toYMD(date);
+                const inCurrentMonth = isCurrentMonth(date);
+                const maxEvents = isExpanded ? 4 : 2;
+                const minHeight = isExpanded ? "min-h-[150px]" : "min-h-[120px]";
+
+                return (
+                  <div
+                    key={key}
+                    className={`
+                      ${minHeight} p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md
+                      ${isToday(date) ? "bg-primary/5 border-primary" : "border-border hover:border-primary/50"}
+                      ${isSelected(date) ? "ring-2 ring-primary ring-offset-2" : ""}
+                      ${!inCurrentMonth ? "opacity-50 bg-muted/20" : ""}
+                    `}
+                    onClick={() => setSelectedDate(key)}
+                  >
+                    <div
+                      className={`text-center mb-3 ${
+                        isToday(date)
+                          ? "font-bold text-primary"
+                          : inCurrentMonth
+                            ? ""
+                            : "text-muted-foreground"
+                      }`}
+                    >
+                      <span className="text-lg">{date.getDate()}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      {dayEvents.slice(0, maxEvents).map((event) => (
+                        <div
+                          key={event.id}
+                          className="text-xs p-1.5 rounded bg-muted/50 hover:bg-muted transition-colors"
+                        >
+                          <div className="flex items-center gap-1 mb-1">
+                            {getTypeIcon(event.type, "h-2 w-2")}
+                            <span className="truncate font-medium">{event.title}</span>
+                          </div>
+                          {isExpanded && event.time && (
+                            <div className="text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-2 w-2" />
+                              <span>{event.time}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {dayEvents.length > maxEvents && (
+                        <div className="text-xs text-muted-foreground text-center py-1 font-medium">
+                          +{dayEvents.length - maxEvents}개 더 보기
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 접기/펼치기 */}
+            <div className="flex justify-center mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsExpanded((v) => !v)}
+                className="flex items-center gap-2"
+                disabled={loading}
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    주간 보기로 접기
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    월간 보기로 펼치기
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
         </CardContent>
       </Card>
 
@@ -427,47 +437,47 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
               })}
             </CardTitle>
             <CardDescription>
-              {selectedDateEvents.length > 0
-                ? `${selectedDateEvents.length}개의 일정`
+              {events.filter((e) => e.date === selectedDate).length > 0
+                ? `${events.filter((e) => e.date === selectedDate).length}개의 일정`
                 : "일정이 없습니다"}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {selectedDateEvents.length > 0 ? (
+            {events.filter((e) => e.date === selectedDate).length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {selectedDateEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className={`p-6 border-l-4 bg-muted/30 rounded-r-md ${getPriorityColor(
-                      event.priority
-                    )}`}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        {getTypeIcon(event.type, "h-4 w-4")}
-                        <span className="font-medium">{event.title}</span>
+                {events
+                  .filter((e) => e.date === selectedDate)
+                  .map((event) => (
+                    <div
+                      key={event.id}
+                      className={`p-6 border-l-4 bg-muted/30 rounded-r-md`}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          {getTypeIcon(event.type, "h-4 w-4")}
+                          <span className="font-medium">{event.title}</span>
+                        </div>
+                        {getTypeBadge(event.type)}
                       </div>
-                      {getTypeBadge(event.type)}
-                    </div>
 
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <Clock className="h-4 w-4" />
-                      <span>{event.time ?? "-"}</span>
-                    </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                        <Clock className="h-4 w-4" />
+                        <span>{event.time ?? "-"}</span>
+                      </div>
 
-                    {event.description && (
-                      <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                        {event.description}
-                      </p>
-                    )}
+                      {event.description && (
+                        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                          {event.description}
+                        </p>
+                      )}
 
-                    <div className="flex justify-end">
-                      <Button size="sm" variant="outline">
-                        상세보기
-                      </Button>
+                      <div className="flex justify-end">
+                        <Button size="sm" variant="outline">
+                          상세보기
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             ) : (
               <div className="text-center py-12">
@@ -485,19 +495,40 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         </Card>
       )}
 
-      {/* 새 일정 모달 */}
-      <EventEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        projectId={projectId!}
-        initial={editorInitial}
-        onSaved={async () => {
-          setEditorOpen(false);
-          if (projectId) invalidateSchedulesCache(projectId);
-          await reload();
-          scheduleBus.emitChanged();
-        }}
-      />
+      {/* 새 일정 모달: 프로젝트가 있을 때만 표시 */}
+      {projectId && (
+        <EventEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          projectId={projectId}
+          initial={editorInitial}
+          onSaved={async () => {
+            setEditorOpen(false);
+            invalidateSchedulesCache(projectId);
+            await reload();
+            scheduleBus.emitChanged();
+          }}
+        />
+      )}
+
+      {/* 프로젝트 필요 안내 다이얼로그 */}
+      {!projectId && (
+        <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>프로젝트 참여가 필요합니다</DialogTitle>
+              <DialogDescription>
+                일정을 추가하려면 먼저 프로젝트에 참여하거나 새 프로젝트를 생성하세요.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>
+                확인
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

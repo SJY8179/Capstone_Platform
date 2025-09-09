@@ -1,3 +1,4 @@
+// src/types/user.ts
 export type UserRole = "student" | "professor" | "admin";
 
 export interface User {
@@ -5,5 +6,5 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  avatar: string | null;
+  avatarUrl?: string | null;
 }

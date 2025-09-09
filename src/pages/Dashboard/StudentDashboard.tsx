@@ -19,6 +19,14 @@ import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules"
 import type {
   DashboardSummary, FeedbackDto, ProjectListDto, TeamListDto, ScheduleDto,
 } from "@/types/domain";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 /* ===== util ===== */
 const toYMD = (d: Date) => d.toISOString().split("T")[0];
@@ -62,6 +70,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [tab, setTab] = useState<STab>("all");
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
   const refreshSchedules = useCallback(async () => {
     if (!projectId) {
@@ -91,7 +100,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         setLoading(true);
 
         if (!projectId) {
-          // 프로젝트 없으면 모든 API 스킵하고 N/A 상태로
           setProject(null);
           setTeam(null);
           setSummary(null);
@@ -107,12 +115,16 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           listProjectFeedback(projectId),
         ]);
 
-        const currentProject = projects.find((p) => p.id === projectId) ?? null;
+        const currentProject =
+          projects.find((p: ProjectListDto) => p.id === projectId) ?? null;
         setProject(currentProject);
 
         if (currentProject?.team) {
-          const currentTeam = teams.find((t) => t.name === currentProject.team) ?? null;
+          const currentTeam =
+            teams.find((t: TeamListDto) => t.name === currentProject.team) ?? null;
           setTeam(currentTeam);
+        } else {
+          setTeam(null);
         }
 
         setSummary(summaryData);
@@ -138,12 +150,20 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const progressRate = summary?.progressPct ?? 0;
   const memberCount = team ? team.members.length : summary?.memberCount ?? undefined;
 
-  const upcomingItems = useMemo(() => {
+  const upcomingItems = useMemo((): ScheduleDto[] => {
     const nowYmd = toYMD(new Date());
     const byTab = (s: ScheduleDto) => (tab === "all" ? true : s.type === tab);
     const futureOnly = (s: ScheduleDto) => (s.date ?? "") >= nowYmd;
     return schedules.filter(byTab).filter(futureOnly).slice(0, 5);
   }, [tab, schedules]);
+
+  const handleClickNewSchedule = () => {
+    if (projectId) {
+      setEditorOpen(true);
+    } else {
+      setNeedProjectOpen(true);
+    }
+  };
 
   if (loading) return <div>Loading...</div>;
 
@@ -221,7 +241,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-medium">
-                  {project?.name ?? "프로젝트명을 불러오는 중…"}
+                  {project ? project.name : "참여 중인 프로젝트가 없습니다."}
                 </h3>
                 <Badge variant="secondary">{progressRate}% 진행</Badge>
               </div>
@@ -260,7 +280,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <CardTitle>다가오는 일정</CardTitle>
                 <CardDescription>회의 · 발표 · 작업 · 마감</CardDescription>
               </div>
-              <Button size="sm" onClick={() => setEditorOpen(true)} disabled={!projectId}>
+              <Button size="sm" onClick={handleClickNewSchedule}>
                 <Plus className="h-4 w-4 mr-1" />
                 새 일정
               </Button>
@@ -293,8 +313,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 const dateTime =
                   item.date
                     ? new Date(
-                      `${item.date}T${item.time ? item.time : "00:00"}:00`
-                    )
+                        `${item.date}T${item.time ? item.time : "00:00"}:00`
+                      )
                     : null;
 
                 return (
@@ -376,7 +396,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         </CardContent>
       </Card>
 
-      {/* 새 일정 모달 - projectId 있을 때만 렌더 */}
+      {/* 새 일정 모달 */}
       {!!projectId && (
         <EventEditor
           open={editorOpen}
@@ -389,6 +409,24 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
             scheduleBus.emitChanged();
           }}
         />
+      )}
+
+      {!projectId && (
+        <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>프로젝트 참여가 필요합니다</DialogTitle>
+              <DialogDescription>
+                일정을 추가하려면 먼저 프로젝트에 참여하거나 새 프로젝트를 생성하세요.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2 sm:justify-end">
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>
+                확인
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

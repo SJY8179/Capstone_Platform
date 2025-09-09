@@ -5,17 +5,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, FileText, Users, AlertCircle, Video, Trash2 } from "lucide-react";
+import { Calendar, FileText, Users, AlertCircle, Video, Trash2, Plus } from "lucide-react";
 import type { UserRole } from "@/types/user";
 import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type { ScheduleDto, ScheduleType, EventType } from "@/types/domain";
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { deleteEvent } from "@/api/events";
 import { scheduleBus } from "@/lib/schedule-bus";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 export interface ScheduleManagementProps {
   userRole: UserRole;
-  projectId: number;
+  projectId?: number;
 }
 
 function toYMD(d: Date) {
@@ -61,6 +69,9 @@ export function ScheduleManagement({ userRole, projectId }: ScheduleManagementPr
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ScheduleDto | null>(null);
 
+  // 프로젝트 필요 안내 모달
+  const [needProjectOpen, setNeedProjectOpen] = useState(false);
+
   // 탭에 따라 조회 기간 설정
   const range = useMemo(() => {
     const today = new Date();
@@ -83,6 +94,11 @@ export function ScheduleManagement({ userRole, projectId }: ScheduleManagementPr
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
+      if (!projectId) {
+        // ✅ 미소속이면 API 콜 없이 빈 목록 유지
+        setSchedules([]);
+        return;
+      }
       const rows = await listSchedulesInRange({
         from: range.from,
         to: range.to,
@@ -156,18 +172,24 @@ export function ScheduleManagement({ userRole, projectId }: ScheduleManagementPr
   }, [schedules, searchQuery, selectedTab]);
 
   const onCreateClick = () => {
+    if (!projectId) {
+      setNeedProjectOpen(true);
+      return;
+    }
     setEditing(null);
     setEditorOpen(true);
   };
 
   const onEditClick = (row: ScheduleDto) => {
     if (!isEventId(row.id)) return;
+    if (!projectId) return;
     setEditing(row);
     setEditorOpen(true);
   };
 
   const onDeleteClick = async (row: ScheduleDto) => {
     if (!isEventId(row.id)) return;
+    if (!projectId) return;
     const idNum = parseEventId(row.id);
     if (!idNum) return;
 
@@ -199,7 +221,10 @@ export function ScheduleManagement({ userRole, projectId }: ScheduleManagementPr
                 : "전체 일정 현황을 확인하고 관리하세요."}
           </p>
         </div>
-        <Button onClick={onCreateClick}>새 일정 추가</Button>
+        <Button onClick={onCreateClick}>
+          <Plus className="h-4 w-4 mr-2" />
+          새 일정 추가
+        </Button>
       </div>
 
       {/* 검색 */}
@@ -295,31 +320,52 @@ export function ScheduleManagement({ userRole, projectId }: ScheduleManagementPr
         </TabsContent>
       </Tabs>
 
-      {/* 이벤트 생성/수정 모달 */}
-      <EventEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        projectId={projectId}
-        initial={
-          editing
-            ? {
-              id: parseEventId(editing.id) ?? undefined,
-              title: editing.title ?? "",
-              date: editing.date ?? "",
-              startTime: editing.time ?? "",
-              endTime: editing.endTime ?? "",
-              type: scheduleTypeToEventType(editing.type),
-              location: editing.location ?? "",
-            }
-            : undefined
-        }
-        onSaved={async () => {
-          setEditorOpen(false);
-          invalidateSchedulesCache(projectId);
-          await refresh();
-          scheduleBus.emitChanged();
-        }}
-      />
+      {/* 이벤트 생성/수정 모달 (프로젝트가 있을 때만) */}
+      {projectId && (
+        <EventEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          projectId={projectId}
+          initial={
+            editing
+              ? {
+                  id: parseEventId(editing.id) ?? undefined,
+                  title: editing.title ?? "",
+                  date: editing.date ?? "",
+                  startTime: editing.time ?? "",
+                  endTime: editing.endTime ?? "",
+                  type: scheduleTypeToEventType(editing.type),
+                  location: editing.location ?? "",
+                }
+              : undefined
+          }
+          onSaved={async () => {
+            setEditorOpen(false);
+            invalidateSchedulesCache(projectId);
+            await refresh();
+            scheduleBus.emitChanged();
+          }}
+        />
+      )}
+
+      {/* 프로젝트 안내 모달 (미소속) */}
+      {!projectId && (
+        <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>프로젝트 참여가 필요합니다</DialogTitle>
+              <DialogDescription>
+                일정을 추가하려면 먼저 프로젝트에 참여하거나 새 프로젝트를 생성하세요.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>
+                확인
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

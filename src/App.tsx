@@ -1,4 +1,4 @@
-﻿// src/App.tsx
+﻿// 변경된 부분만 반영한 전체 교체본
 import { useState, useEffect } from "react";
 import { LoginForm } from "@/components/Auth/LoginForm";
 import { Sidebar } from "@/components/Layout/Sidebar";
@@ -68,7 +68,6 @@ export default function App() {
           myApiSucceeded = true;
           list = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.content ?? [];
         } catch (err: any) {
-          // 404(미구현)일 때만 2순위로
           if (err?.response?.status !== 404) throw err;
         }
 
@@ -125,9 +124,8 @@ export default function App() {
   }
 
   const renderMainContent = () => {
-    const needProject =
-      activePage === "evaluation" ||
-      activePage === "schedule";
+    // 평가만 프로젝트 필요 (일정은 프로젝트 없어도 진입 → 빈 목록 + 추가 가능)
+    const needProject = activePage === "evaluation";
 
     if (needProject && !activeProjectId) {
       return (
@@ -174,7 +172,7 @@ export default function App() {
         return (
           <ScheduleManagement
             userRole={currentUser.role}
-            projectId={activeProjectId!}
+            projectId={activeProjectId ?? undefined}
           />
         );
 
