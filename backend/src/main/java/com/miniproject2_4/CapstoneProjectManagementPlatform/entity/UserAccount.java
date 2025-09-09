@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,4 +22,8 @@ public class UserAccount extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "role", length = 20, nullable = false)
     private Role role;
+
+    @JsonIgnore
+    @Column(name = "password_hash", length = 60)
+    private String passwordHash;
 }
