@@ -12,6 +12,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -57,6 +59,16 @@ public class AuthController {
         new HttpSessionSecurityContextRepository().saveContext(context, request, response);
 
         UserAccount u = userRepository.findByEmail(req.email()).orElseThrow();
+        return new AuthResponse(u.getId(), u.getName(), u.getEmail(), u.getRole().name());
+    }
+
+    @GetMapping("/me")
+    public AuthResponse me(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        var email = authentication.getName();
+        var u = userRepository.findByEmail(email).orElseThrow();
         return new AuthResponse(u.getId(), u.getName(), u.getEmail(), u.getRole().name());
     }
 

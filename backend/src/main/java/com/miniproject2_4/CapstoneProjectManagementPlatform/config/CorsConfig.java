@@ -11,9 +11,16 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
         cfg.addAllowedOrigin("http://localhost:5173");
-        cfg.addAllowedHeader("*");
-        cfg.addAllowedMethod("*");
+        cfg.addAllowedMethod("GET");
+        cfg.addAllowedMethod("POST");
+        cfg.addAllowedMethod("PUT");
+        cfg.addAllowedMethod("DELETE");
+        cfg.addAllowedMethod("OPTIONS");
+        cfg.addAllowedHeader("Content-Type");
+        cfg.addAllowedHeader("Authorization");
+        cfg.addAllowedHeader("X-Requested-With");
         cfg.setAllowCredentials(true);
+        cfg.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
