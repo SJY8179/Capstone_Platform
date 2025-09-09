@@ -6,3 +6,7 @@
 /frontend/dist/
 /frontend/.vite/
 /backend/src/main/resources/application-local.properties
+# frontend build artifacts
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
