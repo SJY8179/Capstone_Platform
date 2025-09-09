@@ -1,0 +1,21 @@
+name: backend-ci
+on:
+  pull_request:
+    paths: [ "backend/**" ]
+  push:
+    branches: [ main, moinji_merge ]
+    paths: [ "backend/**" ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build backend
+        working-directory: backend
+        run: |
+          chmod +x ./mvnw || true
+          ./mvnw -q -DskipTests package
