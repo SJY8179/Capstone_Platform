@@ -1,9 +1,14 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ScheduleDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.ScheduleService;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.util.ProjectAccessGuard;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -14,6 +19,16 @@ import java.util.List;
 public class ScheduleController {
 
     private final ScheduleService scheduleService;
+    private final ProjectAccessGuard projectAccessGuard;
+
+    private Long currentUserId(Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+        Object p = auth.getPrincipal();
+        if (p instanceof UserAccount ua) return ua.getId();
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 올바르지 않습니다.");
+    }
 
     @GetMapping("/schedules")
     public List<ScheduleDto> list() {
@@ -27,10 +42,15 @@ public class ScheduleController {
             @RequestParam String to,
             @RequestParam(required = false) Long projectId,
             @RequestParam(required = false) Long teamId,
-            @RequestParam(defaultValue = "false") boolean onlyEvents
+            @RequestParam(defaultValue = "false") boolean onlyEvents,
+            Authentication auth
     ) {
+        if (projectId != null) {
+            projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        }
         return scheduleService.listSchedulesInRange(
                 projectId, teamId, LocalDate.parse(from), LocalDate.parse(to), onlyEvents
         );
+        // NOTE: teamId 접근 제어는 Step 2에서 팀 모델 정비 후 추가 예정
     }
 }
