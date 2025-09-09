@@ -1,2 +1,11 @@
-# Capstone_Platform
-SK Shieldus(2) 미니프로젝트 캡스톤 프로젝트 관리 플랫폼 개발 팀프로젝트 
+
+  # Capstone Project Management Platform
+
+  This is a code bundle for Capstone Project Management Platform. The original project is available at https://www.figma.com/design/isq8i3qmNfg1J8iKh4TcfQ/Capstone-Project-Management-Platform.
+
+  ## Running the code
+
+  Run `npm i` to install the dependencies.
+
+  Run `npm run dev` to start the development server.
+  
