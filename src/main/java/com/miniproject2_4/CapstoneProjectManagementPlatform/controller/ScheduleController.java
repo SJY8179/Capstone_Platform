@@ -51,6 +51,5 @@ public class ScheduleController {
         return scheduleService.listSchedulesInRange(
                 projectId, teamId, LocalDate.parse(from), LocalDate.parse(to), onlyEvents
         );
-        // NOTE: teamId 접근 제어는 Step 2에서 팀 모델 정비 후 추가 예정
     }
 }

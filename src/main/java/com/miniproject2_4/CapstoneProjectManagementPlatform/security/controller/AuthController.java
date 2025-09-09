@@ -38,11 +38,21 @@ public class AuthController {
         this.jwtUtil = jwtUtil;
     }
 
-    public record RegisterReq(String name, String email, String password) {}
+    public record RegisterReq(String name, String email, String password, String role) {}
     public record LoginReq(String email, String password) {}
     public record RefreshReq(String refreshToken) {}
 
-    @PostMapping("/register")
+    private Role resolveRole(String raw) {
+        if (raw == null || raw.isBlank()) return Role.STUDENT;
+        try {
+            return Role.valueOf(raw.trim().toUpperCase());
+        } catch (Exception ignore) {
+            return Role.STUDENT;
+        }
+    }
+
+    // /auth/register 와 /auth/signup 모두 허용
+    @PostMapping({"/register", "/signup"})
     public ResponseEntity<?> register(@RequestBody RegisterReq req) {
         if (req == null || req.email() == null || req.password() == null || req.name() == null) {
             throw new ResponseStatusException(BAD_REQUEST, "필수 값이 누락되었습니다.");
@@ -51,16 +61,23 @@ public class AuthController {
             throw new ResponseStatusException(BAD_REQUEST, "이미 사용 중인 이메일입니다.");
         });
 
+        Role role = resolveRole(req.role());
+
         UserAccount ua = UserAccount.builder()
                 .name(req.name())
                 .email(req.email().trim().toLowerCase())
-                .role(Role.STUDENT)
+                .role(role)
                 .passwordHash(passwordEncoder.encode(req.password()))
                 .build();
         userRepository.save(ua);
 
         return ResponseEntity.ok(Map.of(
-                "user", Map.of("id", ua.getId(), "name", ua.getName(), "email", ua.getEmail())
+                "user", Map.of(
+                        "id", ua.getId(),
+                        "name", ua.getName(),
+                        "email", ua.getEmail(),
+                        "role", ua.getRole().name().toLowerCase()
+                )
         ));
     }
 
@@ -89,7 +106,12 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "accessToken", accessToken,
                 "refreshToken", refreshToken,
-                "user", Map.of("id", ua.getId(), "name", ua.getName(), "email", ua.getEmail())
+                "user", Map.of(
+                        "id", ua.getId(),
+                        "name", ua.getName(),
+                        "email", ua.getEmail(),
+                        "role", ua.getRole().name().toLowerCase()
+                )
         ));
     }
 
@@ -101,7 +123,7 @@ public class AuthController {
             authSessionRepository.deleteByRefreshToken(req.refreshToken());
             throw new ResponseStatusException(UNAUTHORIZED, "리프레시 토큰이 만료되었습니다.");
         }
-        UserAccount ua = session.getUser(); // EntityGraph 로 user 즉시로딩
+        UserAccount ua = session.getUser();
         String newAccess = jwtUtil.generateAccessToken(ua.getId(), ua.getEmail(), ua.getName());
         return ResponseEntity.ok(Map.of("accessToken", newAccess));
     }
@@ -113,12 +135,12 @@ public class AuthController {
         }
         UserAccount ua = (UserAccount) auth.getPrincipal();
 
-        // Map.of 는 null 값을 허용하지 않으므로, null-safe 로 구성
         Map<String, Object> body = new HashMap<>();
         body.put("id", ua.getId());
         body.put("name", ua.getName());
         body.put("email", ua.getEmail());
         body.put("avatarUrl", ua.getAvatarUrl() == null ? "" : ua.getAvatarUrl());
+        body.put("role", ua.getRole() == null ? "student" : ua.getRole().name().toLowerCase());
 
         return ResponseEntity.ok(body);
     }
