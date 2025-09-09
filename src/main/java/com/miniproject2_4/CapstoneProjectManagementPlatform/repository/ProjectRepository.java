@@ -20,12 +20,17 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     Optional<Project> findByTeam_Id(Long teamId);
 
-    // --- 추가: 해당 사용자(팀 멤버)가 속한 프로젝트 목록 ---
-    @Query(value = """
-        SELECT p.* 
-          FROM project p
-          JOIN team_member tm ON tm.team_id = p.team_id
-         WHERE tm.user_id = :userId
-        """, nativeQuery = true)
+    // ★ 핵심: 팀을 fetch join 해서 컨트롤러에서 team 접근 시 LAZY 예외가 안 나게 함
+    @Query("""
+        select distinct p
+          from Project p
+          left join fetch p.team t
+         where exists (
+               select 1
+                 from TeamMember tm
+                where tm.team = p.team
+                  and tm.user.id = :userId
+         )
+    """)
     List<Project> findAllByMemberUserId(@Param("userId") Long userId);
 }

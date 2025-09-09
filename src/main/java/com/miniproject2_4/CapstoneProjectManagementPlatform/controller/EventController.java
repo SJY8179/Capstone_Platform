@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/projects/{projectId}")
-public class EventController {
+public class EventController { // ← 파일명과 일치
 
     private final EventService eventService;
     private final ProjectAccessGuard projectAccessGuard;
@@ -30,7 +30,6 @@ public class EventController {
     public record CreateReq(String title, String startAtIso, String endAtIso, EventType type, String location) {}
     public record UpdateReq(String title, String startAtIso, String endAtIso, EventType type, String location) {}
 
-    /* ===== 공통 유틸 ===== */
     private Long currentUserId(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
@@ -40,16 +39,13 @@ public class EventController {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 올바르지 않습니다.");
     }
 
-    /* ===== 조회 ===== */
-
-    // 목록
     @GetMapping("/events")
     public ResponseEntity<List<EventDto>> list(@PathVariable Long projectId, Authentication auth) {
         projectAccessGuard.assertMember(projectId, currentUserId(auth));
         return ResponseEntity.ok(eventService.listByProject(projectId));
     }
 
-    // 기간 조회: /projects/{pid}/events/range?from=YYYY-MM-DD&to=YYYY-MM-DD
+    // /projects/{pid}/events/range?from=YYYY-MM-DD&to=YYYY-MM-DD
     @GetMapping("/events/range")
     public ResponseEntity<List<EventDto>> findInRange(
             @PathVariable Long projectId,
@@ -63,8 +59,6 @@ public class EventController {
         }
         return ResponseEntity.ok(eventService.findInRange(projectId, from, to));
     }
-
-    /* ===== 쓰기 ===== */
 
     @PostMapping("/events")
     public ResponseEntity<EventDto> create(@PathVariable Long projectId,

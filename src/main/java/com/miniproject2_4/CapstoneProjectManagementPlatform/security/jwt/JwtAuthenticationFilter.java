@@ -39,7 +39,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String rel  = path.startsWith(ctx) ? path.substring(ctx.length()) : path;
 
         // 로그인/회원가입/리프레시만 필터 패스. (/auth/me 는 토큰이 있으면 인증되도록 필터 태움)
-        if (rel.equals("/auth/login") || rel.equals("/auth/register") || rel.equals("/auth/refresh")) {
+        if (rel.equals("/auth/login") || rel.equals("/auth/register") || rel.equals("/auth/signup") || rel.equals("/auth/refresh")) {
             chain.doFilter(request, response);
             return;
         }

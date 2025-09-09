@@ -5,6 +5,7 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-@org.springframework.transaction.annotation.Transactional(readOnly = true)
+@Transactional(readOnly = true)
 public class TeamService {
 
     private final TeamRepository teamRepository;
@@ -87,7 +88,7 @@ public class TeamService {
                 team.getId(),
                 team.getName(),
                 projectTitle,
-                "팀 소개가 없습니다.",
+                null, // 별도 설명 없음
                 leader,
                 members,
                 stats,
@@ -96,7 +97,7 @@ public class TeamService {
         );
     }
 
-    /** 전체 팀 (관리자/운영자 용도) */
+    /** 전체 팀 */
     public List<TeamListDto> listTeams() {
         return teamRepository.findAll().stream().map(this::toDto).toList();
     }
@@ -111,7 +112,7 @@ public class TeamService {
         if (raw instanceof TeamRole r) return r;
         if (raw instanceof String s) {
             try { return TeamRole.valueOf(s); }
-            catch (IllegalArgumentException ignore) { }
+            catch (IllegalArgumentException ignore) {}
         }
         return TeamRole.MEMBER;
     }

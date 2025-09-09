@@ -8,9 +8,8 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.service.ProjectServi
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
@@ -25,6 +24,7 @@ public class ProjectController {
     private final ProjectService projectService;
     private final ProjectRepository projectRepository;
 
+    /** 전체 프로젝트 목록: /api/projects */
     @GetMapping("/projects")
     public List<ProjectListDto> list() {
         return projectService.listProjects();
@@ -32,6 +32,7 @@ public class ProjectController {
 
     /** 내가 속한 프로젝트 목록: /api/projects/my */
     @GetMapping("/projects/my")
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> my(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
@@ -43,12 +44,15 @@ public class ProjectController {
 
         List<Project> projects = projectRepository.findAllByMemberUserId(ua.getId());
 
-        // 타입 추론 문제 방지를 위해 명시적 Map 생성 사용
         return projects.stream()
                 .map(prj -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", prj.getId());
-                    m.put("title", prj.getTitle());
+                    String title = prj.getTitle();
+                    m.put("name", title);
+                    m.put("title", title);
+                    String teamName = (prj.getTeam() != null) ? prj.getTeam().getName() : null;
+                    m.put("team", teamName);
                     m.put("isMember", Boolean.TRUE);
                     return m;
                 })

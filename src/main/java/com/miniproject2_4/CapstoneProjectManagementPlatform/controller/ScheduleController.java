@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -45,11 +46,13 @@ public class ScheduleController {
             @RequestParam(defaultValue = "false") boolean onlyEvents,
             Authentication auth
     ) {
-        if (projectId != null) {
-            projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        // projectId가 없으면 프론트는 빈 캘린더를 원함 → 빈 배열 반환
+        if (projectId == null) {
+            return Collections.emptyList();
         }
-        return scheduleService.listSchedulesInRange(
-                projectId, teamId, LocalDate.parse(from), LocalDate.parse(to), onlyEvents
-        );
+        projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        LocalDate fromD = LocalDate.parse(from);
+        LocalDate toD   = LocalDate.parse(to);
+        return scheduleService.listSchedulesInRange(projectId, teamId, fromD, toD, onlyEvents);
     }
 }
