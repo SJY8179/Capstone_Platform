@@ -7,9 +7,14 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.UserRepos
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 @RestController
@@ -37,10 +42,20 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@RequestBody LoginRequest req, HttpSession session) {
+    public AuthResponse login(@RequestBody LoginRequest req,
+                              HttpServletRequest request,
+                              HttpServletResponse response) {
         Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.email(), req.password())
+            new UsernamePasswordAuthenticationToken(req.email(), req.password())
         );
+
+        // ★ 인증 컨텍스트를 세션에 저장(핵심)
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
+        request.getSession(true); // 세션 생성 보장
+        new HttpSessionSecurityContextRepository().saveContext(context, request, response);
+
         UserAccount u = userRepository.findByEmail(req.email()).orElseThrow();
         return new AuthResponse(u.getId(), u.getName(), u.getEmail(), u.getRole().name());
     }
