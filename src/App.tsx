@@ -33,9 +33,12 @@ export default function App() {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+<<<<<<< HEAD
   // 데모/샘플용: 현재 보고 있는 프로젝트 id를 고정(백엔드에 존재하는 id여야 함)
   const projectId = 1;
 
+=======
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
   useEffect(() => {
     http.get("/ping").catch((e) => {
       console.warn("Backend not reachable:", e);
@@ -44,6 +47,12 @@ export default function App() {
   }, []);
 
   const renderMainContent = () => {
+<<<<<<< HEAD
+=======
+    // 데모용으로 projectId는 1을 사용합니다.
+    const projectId = 1;
+
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
     switch (activePage) {
       case "dashboard":
         if (currentUser.role === "student")
@@ -88,7 +97,10 @@ export default function App() {
         onPageChange={setActivePage}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+<<<<<<< HEAD
         projectId={projectId}  // ✅ 사이드바에도 현재 프로젝트 id 전달
+=======
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={currentUser} />
@@ -96,4 +108,8 @@ export default function App() {
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

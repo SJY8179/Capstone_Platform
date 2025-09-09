@@ -1,4 +1,5 @@
 ﻿import { http } from "@/api/http";
+<<<<<<< HEAD
 import type { EventDto, EventType } from "@/types/domain";
 
 /** 프로젝트 이벤트 전체 목록 */
@@ -40,10 +41,22 @@ export async function createEvent(
   const { data } = await http.post<EventDto>(
     `/projects/${projectId}/events`,
     payload
+=======
+import type { EventDto } from "@/types/domain";
+
+export async function listProjectEvents(
+  projectId: number,
+  params: { from?: string; to?: string } = {}
+) {
+  const { data } = await http.get<EventDto[]>(
+    `/projects/${projectId}/events`,
+    { params }
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
   );
   return data;
 }
 
+<<<<<<< HEAD
 /**
  * 수정
  * - 부분 수정 가능
@@ -70,3 +83,6 @@ export async function updateEvent(
 export async function deleteEvent(projectId: number, id: number) {
   await http.delete(`/projects/${projectId}/events/${id}`);
 }
+=======
+
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

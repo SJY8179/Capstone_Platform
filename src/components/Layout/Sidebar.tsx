@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 ﻿import React, { useEffect, useState } from "react";
+=======
+﻿import React, { useState } from "react";
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 import {
   Home,
   FolderOpen,
@@ -17,8 +21,11 @@ import {
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { UserRole, ActivePage } from "../../App";
+<<<<<<< HEAD
 import { listSchedulesInRange } from "@/api/schedules";
 import type { ScheduleDto, SchedulePriority, ScheduleType } from "@/types/domain";
+=======
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 
 interface SidebarProps {
   userRole: UserRole;
@@ -26,6 +33,7 @@ interface SidebarProps {
   onPageChange: (page: ActivePage) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+<<<<<<< HEAD
   /** 현재 보고 있는 프로젝트 id (없으면 백엔드 첫 프로젝트 기준) */
   projectId?: number;
 }
@@ -46,12 +54,17 @@ const toYMDLocal = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
+=======
+}
+
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 export function Sidebar({
   userRole,
   activePage,
   onPageChange,
   collapsed,
   onToggleCollapse,
+<<<<<<< HEAD
   projectId,
 }: SidebarProps) {
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
@@ -84,11 +97,49 @@ export function Sidebar({
         return admin;
       default:
         return common;
+=======
+}: SidebarProps) {
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
+
+  const getMenuItems = () => {
+    const commonItems = [
+      { id: "dashboard" as ActivePage, label: "대시보드", icon: Home },
+      { id: "projects" as ActivePage, label: "프로젝트", icon: FolderOpen },
+    ];
+
+    const studentItems = [
+      ...commonItems,
+      { id: "teams" as ActivePage, label: "팀 관리", icon: Users },
+    ];
+
+    const professorItems = [
+      ...commonItems,
+      { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
+      { id: "teams" as ActivePage, label: "팀 관리", icon: Users },
+    ];
+
+    const adminItems = [
+      ...commonItems,
+      { id: "users" as ActivePage, label: "사용자 관리", icon: UserCog },
+      { id: "evaluation" as ActivePage, label: "평가 시스템", icon: ClipboardCheck },
+    ];
+
+    switch (userRole) {
+      case "student":
+        return studentItems;
+      case "professor":
+        return professorItems;
+      case "admin":
+        return adminItems;
+      default:
+        return commonItems;
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
     }
   };
 
   const menuItems = getMenuItems();
 
+<<<<<<< HEAD
   /* 다가오는 일정 로드 (백엔드) */
   useEffect(() => {
     let alive = true;
@@ -156,6 +207,52 @@ export function Sidebar({
     if (t === "meeting") return <Users className="h-3 w-3 text-green-500" />;
     if (t === "presentation") return <Calendar className="h-3 w-3 text-blue-500" />;
     return <Calendar className="h-3 w-3 text-muted-foreground" />;
+=======
+  // 예시: 다가오는 일정 (실제 데이터는 props/context로 교체)
+  const upcomingSchedules = [
+    {
+      id: 1,
+      title: "중간 보고서 제출",
+      date: "2025-09-15",
+      time: "23:59",
+      type: "deadline",
+      priority: "high",
+    },
+    {
+      id: 2,
+      title: "팀 Alpha 발표",
+      date: "2025-09-18",
+      time: "14:00",
+      type: "presentation",
+      priority: "high",
+    },
+    {
+      id: 3,
+      title: "멘토링 미팅",
+      date: "2025-09-22",
+      time: "15:30",
+      type: "meeting",
+      priority: "medium",
+    },
+  ];
+
+  const formatScheduleDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return "오늘";
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return "내일";
+    } else {
+      return date.toLocaleDateString("ko-KR", {
+        month: "numeric",
+        day: "numeric",
+      });
+    }
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
   };
 
   return (
@@ -164,7 +261,11 @@ export function Sidebar({
         collapsed ? "w-16" : "w-64"
       } bg-sidebar border-r border-sidebar-border transition-all duration-300 relative`}
     >
+<<<<<<< HEAD
       {/* 접기/펼치기 */}
+=======
+      {/* 접기/펼치기 버튼 */}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
       <Button
         variant="ghost"
         size="sm"
@@ -172,6 +273,7 @@ export function Sidebar({
         className="absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-sidebar shadow-md hover:bg-sidebar-accent"
         aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
       >
+<<<<<<< HEAD
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </Button>
 
@@ -182,12 +284,34 @@ export function Sidebar({
           {!collapsed && (
             <div className="leading-5 tracking-tight">
               <h1 className="text-xl font-semibold break-keep">캡스톤 관리 플랫폼</h1>
+=======
+        {collapsed ? (
+          <ChevronRight className="h-3 w-3" />
+        ) : (
+          <ChevronLeft className="h-3 w-3" />
+        )}
+      </Button>
+
+      <div className={`${collapsed ? "p-2" : "p-6"} transition-all duration-300`}>
+        <div
+          className={`flex items-center gap-2 mb-8 ${
+            collapsed ? "justify-center" : ""
+          }`}
+        >
+          <BookOpen className="h-8 w-8 text-primary flex-shrink-0" />
+          {!collapsed && (
+            <div>
+              <h1 className="text-xl font-semibold">캡스톤 관리 플랫폼</h1>
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
               <p className="text-sm text-muted-foreground">프로젝트 관리</p>
             </div>
           )}
         </div>
 
+<<<<<<< HEAD
         {/* 메뉴 */}
+=======
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
         <nav className="space-y-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -195,7 +319,13 @@ export function Sidebar({
               <Button
                 key={item.id}
                 variant={activePage === item.id ? "secondary" : "ghost"}
+<<<<<<< HEAD
                 className={`w-full ${collapsed ? "justify-center px-2" : "justify-start gap-3"}`}
+=======
+                className={`w-full ${
+                  collapsed ? "justify-center px-2" : "justify-start gap-3"
+                }`}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 onClick={() => onPageChange(item.id)}
                 title={collapsed ? item.label : undefined}
               >
@@ -206,13 +336,22 @@ export function Sidebar({
           })}
         </nav>
 
+<<<<<<< HEAD
         {/* 하단: 일정/공지/설정 */}
+=======
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
         <div className="mt-8 pt-8 border-t border-sidebar-border">
           <div className="space-y-2">
             <div>
               <Button
                 variant={activePage === "schedule" ? "secondary" : "ghost"}
+<<<<<<< HEAD
                 className={`w-full ${collapsed ? "justify-center px-2" : "justify-start gap-3"}`}
+=======
+                className={`w-full ${
+                  collapsed ? "justify-center px-2" : "justify-start gap-3"
+                }`}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 onClick={() => {
                   onPageChange("schedule");
                   if (!collapsed) setShowScheduleDropdown((v) => !v);
@@ -223,6 +362,7 @@ export function Sidebar({
                 {!collapsed && "일정 관리"}
               </Button>
 
+<<<<<<< HEAD
               {!collapsed && showScheduleDropdown && (
                 <div className="mt-2 ml-4 space-y-1 border-l border-sidebar-border pl-4">
                   <div className="text-xs font-medium text-muted-foreground mb-2">다가오는 일정</div>
@@ -242,6 +382,34 @@ export function Sidebar({
                         <span className="text-xs font-medium truncate">{s.title}</span>
                         {s.priority === "high" && (
                           <Badge variant="destructive" className="text-[10px] h-4 px-1 leading-4">
+=======
+              {/* 일정 드롭다운 */}
+              {!collapsed && showScheduleDropdown && (
+                <div className="mt-2 ml-4 space-y-1 border-l border-sidebar-border pl-4">
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    다가오는 일정
+                  </div>
+                  {upcomingSchedules.slice(0, 3).map((schedule) => (
+                    <div
+                      key={schedule.id}
+                      className="p-2 rounded-md hover:bg-sidebar-accent cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        {schedule.type === "deadline" && (
+                          <AlertCircle className="h-3 w-3 text-red-500" />
+                        )}
+                        {schedule.type === "presentation" && (
+                          <Calendar className="h-3 w-3 text-blue-500" />
+                        )}
+                        {schedule.type === "meeting" && (
+                          <Users className="h-3 w-3 text-green-500" />
+                        )}
+                        <span className="text-xs font-medium truncate">
+                          {schedule.title}
+                        </span>
+                        {schedule.priority === "high" && (
+                          <Badge variant="destructive" className="text-xs h-4 px-1">
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                             !
                           </Badge>
                         )}
@@ -249,18 +417,36 @@ export function Sidebar({
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         <span>
+<<<<<<< HEAD
                           {formatScheduleDate(s.date)} {s.time ?? ""}
+=======
+                          {formatScheduleDate(schedule.date)} {schedule.time}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                         </span>
                       </div>
                     </div>
                   ))}
+<<<<<<< HEAD
+=======
+                  {upcomingSchedules.length > 3 && (
+                    <div className="text-xs text-muted-foreground text-center pt-1">
+                      +{upcomingSchedules.length - 3}개 더 보기
+                    </div>
+                  )}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 </div>
               )}
             </div>
 
             <Button
               variant="ghost"
+<<<<<<< HEAD
               className={`w-full ${collapsed ? "justify-center px-2" : "justify-start gap-3"}`}
+=======
+              className={`w-full ${
+                collapsed ? "justify-center px-2" : "justify-start gap-3"
+              }`}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
               title={collapsed ? "공지/메시지" : undefined}
             >
               <MessageSquare className="h-4 w-4 flex-shrink-0" />
@@ -269,7 +455,13 @@ export function Sidebar({
 
             <Button
               variant="ghost"
+<<<<<<< HEAD
               className={`w-full ${collapsed ? "justify-center px-2" : "justify-start gap-3"}`}
+=======
+              className={`w-full ${
+                collapsed ? "justify-center px-2" : "justify-start gap-3"
+              }`}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
               title={collapsed ? "설정" : undefined}
             >
               <Settings className="h-4 w-4 flex-shrink-0" />
@@ -280,4 +472,8 @@ export function Sidebar({
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

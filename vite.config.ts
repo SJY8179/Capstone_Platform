@@ -10,7 +10,10 @@ export default defineConfig({
     },
   },
   server: {
+<<<<<<< HEAD
     port: 4500,
+=======
+>>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
     proxy: {
       "/api": {
         target: "http://localhost:8080",
