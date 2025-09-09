@@ -1,0 +1,40 @@
+package com.miniproject2_4.CapstoneProjectManagementPlatform.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Table(name = "project")
+@Getter @Setter
+@NoArgsConstructor @AllArgsConstructor @Builder
+public class Project extends BaseEntity {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "team_id")
+    private Team team;
+
+    @Column(nullable = false, length = 100)
+    private String title;
+
+    @Column(name = "github_repo", length = 100)
+    private String githubRepo;
+
+    @Column(name = "repo_owner", length = 50)
+    private String repoOwner;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Status status;   // <-- DB 값: ACTIVE
+
+    /** ProjectService에서 참조하는 중첩 enum */
+    public enum Status {
+        ACTIVE,        // 현재 DB에 들어있는 값
+        PLANNING,
+        IN_PROGRESS,
+        REVIEW,
+        COMPLETED
+    }
+}

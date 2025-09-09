@@ -1,0 +1,28 @@
+@host = localhost
+@port = 8080
+@base = http://{{host}}:{{port}}
+@json = application/json
+
+###
+GET {{base}}/api/schedules
+Accept: {{json}}
+
+###
+GET {{base}}/api/schedules/range?from=2025-09-01&to=2025-09-30
+Accept: {{json}}
+
+###
+GET {{base}}/api/projects/1/dashboard/summary
+Accept: {{json}}
+
+###
+GET {{base}}/api/projects/1/dashboard/status
+Accept: {{json}}
+
+###
+GET {{base}}/api/projects/1/events?from=2025-09-01&to=2025-09-30
+Accept: {{json}}
+
+###
+PATCH {{base}}/api/projects/1/assignments/1/status?value=COMPLETED
+Content-Type: {{json}}
