@@ -48,7 +48,7 @@ const TEXTS = {
 
 interface ProfessorDashboardProps {
   professorId?: number; 
-  projectId: number;
+  projectId?: number;
 }
 
 export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboardProps) {
@@ -62,7 +62,7 @@ export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboar
         setLoading(true);
         const [projectData, teamData] = await Promise.all([
           listProjects(),
-          listTeams(),
+          listTeams(), // ← /teams/my 사용
         ]);
         setProjects(projectData);
         setTeams(teamData);
@@ -83,9 +83,7 @@ export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboar
     avgProgress: 'N/A'
   };
 
-  if (loading) {
-    return <div>{TEXTS.loading}</div>;
-  }
+  if (loading) return <div>{TEXTS.loading}</div>;
 
   return (
     <div className="space-y-6">
@@ -168,7 +166,7 @@ export function ProfessorDashboard({ professorId, projectId }: ProfessorDashboar
         </Card>
       </div>
 
-      <CalendarWidget />
+      <CalendarWidget projectId={projectId} />
 
       <Card>
         <CardHeader>

@@ -24,7 +24,7 @@ import { getProjectDashboardStatus } from "@/api/dashboard";
 import type { ProjectListDto, ProjectStatus, DashboardStatus } from "@/types/domain";
 
 interface AdminDashboardProps {
-  projectId: number; // 현재는 단일 프로젝트 기준
+  projectId?: number;
 }
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -43,11 +43,17 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [projectData, statusData] = await Promise.all([
-          listProjects(),
-          getProjectDashboardStatus(projectId),
-        ]);
+        // 프로젝트 목록은 항상 가능
+        const projectData = await listProjects();
         setProjects(projectData);
+
+        // projectId 없으면 상태는 N/A
+        if (!projectId) {
+          setStatus(null);
+          return;
+        }
+
+        const statusData = await getProjectDashboardStatus(projectId);
         setStatus(statusData);
       } catch (error) {
         console.error("Failed to fetch admin dashboard data:", error);
@@ -96,9 +102,7 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
     }
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  if (loading) return <div>Loading...</div>;
 
   return (
     <div className="space-y-6">
@@ -232,7 +236,7 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
       </div>
 
       {/* 캘린더 위젯 */}
-      <CalendarWidget />
+      <CalendarWidget projectId={projectId} />
 
       {/* 시스템 상태 */}
       <Card>

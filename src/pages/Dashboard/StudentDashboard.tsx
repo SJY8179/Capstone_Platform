@@ -1,10 +1,6 @@
 ﻿import { useEffect, useMemo, useState, useCallback } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,27 +9,15 @@ import { CalendarWidget } from "@/components/Dashboard/CalendarWidget";
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { scheduleBus } from "@/lib/schedule-bus";
 import {
-  Calendar,
-  Users,
-  FileText,
-  GitBranch,
-  CheckCircle,
-  AlertCircle,
-  Plus,
-  Video,
-  Clock,
+  Calendar, Users, FileText, GitBranch, CheckCircle, AlertCircle, Plus, Video, Clock,
 } from "lucide-react";
 import { getProjectDashboardSummary } from "@/api/dashboard";
 import { listProjectFeedback } from "@/api/feedback";
 import { listProjects } from "@/api/projects";
 import { listTeams } from "@/api/teams";
-import { listSchedulesInRange } from "@/api/schedules";
+import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type {
-  DashboardSummary,
-  FeedbackDto,
-  ProjectListDto,
-  TeamListDto,
-  ScheduleDto,
+  DashboardSummary, FeedbackDto, ProjectListDto, TeamListDto, ScheduleDto,
 } from "@/types/domain";
 
 /* ===== util ===== */
@@ -50,13 +34,7 @@ const formatDateK = (isoOrYmd?: string | null) =>
 type STab = "all" | "meeting" | "presentation" | "task" | "deadline";
 
 /* 아이콘/색상 헬퍼 */
-function TypeIcon({
-  type,
-  className = "h-4 w-4",
-}: {
-  type: ScheduleDto["type"];
-  className?: string;
-}) {
+function TypeIcon({ type, className = "h-4 w-4" }: { type: ScheduleDto["type"]; className?: string; }) {
   switch (type) {
     case "deadline":
       return <AlertCircle className={`${className} text-red-500`} />;
@@ -72,7 +50,7 @@ function TypeIcon({
 
 /* ===== component ===== */
 interface StudentDashboardProps {
-  projectId: number;
+  projectId?: number;
 }
 
 export function StudentDashboard({ projectId }: StudentDashboardProps) {
@@ -83,8 +61,13 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
   const [tab, setTab] = useState<STab>("all");
   const [loading, setLoading] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const refreshSchedules = useCallback(async () => {
+    if (!projectId) {
+      setSchedules([]);
+      return;
+    }
     const today = new Date();
     const end = addDays(today, 45);
 
@@ -107,7 +90,16 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
       try {
         setLoading(true);
 
-        // 프로젝트/팀/대시보드/피드백 병렬 호출
+        if (!projectId) {
+          // 프로젝트 없으면 모든 API 스킵하고 N/A 상태로
+          setProject(null);
+          setTeam(null);
+          setSummary(null);
+          setFeedback([]);
+          setSchedules([]);
+          return;
+        }
+
         const [projects, teams, summaryData, feedbackData] = await Promise.all([
           listProjects(),
           listTeams(),
@@ -119,15 +111,13 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         setProject(currentProject);
 
         if (currentProject?.team) {
-          const currentTeam =
-            teams.find((t) => t.name === currentProject.team) ?? null;
+          const currentTeam = teams.find((t) => t.name === currentProject.team) ?? null;
           setTeam(currentTeam);
         }
 
         setSummary(summaryData);
         setFeedback(feedbackData);
 
-        // 일정
         await refreshSchedules();
       } catch (e) {
         console.error("Failed to load dashboard:", e);
@@ -148,16 +138,12 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const progressRate = summary?.progressPct ?? 0;
   const memberCount = team ? team.members.length : summary?.memberCount ?? undefined;
 
-  /* ============ 다가오는 일정 탭 필터 ============ */
   const upcomingItems = useMemo(() => {
     const nowYmd = toYMD(new Date());
     const byTab = (s: ScheduleDto) => (tab === "all" ? true : s.type === tab);
-    const futureOnly = (s: ScheduleDto) => (s.date ?? "") >= nowYmd; // 오늘 이후
+    const futureOnly = (s: ScheduleDto) => (s.date ?? "") >= nowYmd;
     return schedules.filter(byTab).filter(futureOnly).slice(0, 5);
   }, [tab, schedules]);
-
-  // 모달 (새 일정)
-  const [editorOpen, setEditorOpen] = useState(false);
 
   if (loading) return <div>Loading...</div>;
 
@@ -249,9 +235,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  최종 업데이트: {formatDateK(project?.lastUpdate)}
-                </span>
+                <span>최종 업데이트: {formatDateK(project?.lastUpdate)}</span>
               </div>
             </div>
 
@@ -268,7 +252,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 다가오는 일정 - 탭 */}
+        {/* 다가오는 일정 */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -276,7 +260,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <CardTitle>다가오는 일정</CardTitle>
                 <CardDescription>회의 · 발표 · 작업 · 마감</CardDescription>
               </div>
-              <Button size="sm" onClick={() => setEditorOpen(true)}>
+              <Button size="sm" onClick={() => setEditorOpen(true)} disabled={!projectId}>
                 <Plus className="h-4 w-4 mr-1" />
                 새 일정
               </Button>
@@ -284,7 +268,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
 
             <div className="mt-3 flex flex-wrap gap-2">
               {([
-                { v: "all",    label: "전체" },
+                { v: "all", label: "전체" },
                 { v: "meeting", label: "회의" },
                 { v: "presentation", label: "발표" },
                 { v: "task", label: "작업" },
@@ -309,8 +293,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 const dateTime =
                   item.date
                     ? new Date(
-                        `${item.date}T${item.time ? item.time : "00:00"}:00`
-                      )
+                      `${item.date}T${item.time ? item.time : "00:00"}:00`
+                    )
                     : null;
 
                 return (
@@ -327,12 +311,12 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                             <>
                               <Clock className="h-3 w-3" />
                               {dateTime.toLocaleDateString("ko-KR")}
-                              {item.time && ` ${item.time}${item.endTime ? ` ~ ${item.endTime}` : ""}`}
+                              {item.time &&
+                                ` ${item.time}${item.endTime ? ` ~ ${item.endTime}` : ""
+                                }`}
                             </>
                           )}
-                          {item.location && (
-                            <span className="ml-2">· {item.location}</span>
-                          )}
+                          {item.location && <span className="ml-2">· {item.location}</span>}
                         </p>
                       </div>
                     </div>
@@ -353,8 +337,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         </Card>
       </div>
 
-      {/* 월간 캘린더 위젯 */}
-      <CalendarWidget />
+      {/* 월간 캘린더 위젯 - projectId 없으면 내부에서 플레이스홀더 */}
+      <CalendarWidget projectId={projectId} />
 
       {/* 최근 피드백 */}
       <Card>
@@ -392,17 +376,20 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         </CardContent>
       </Card>
 
-      {/* 새 일정 모달 (저장 후 재조회) */}
-      <EventEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        projectId={projectId}
-        onSaved={async () => {
-          setEditorOpen(false);
-          await refreshSchedules();
-          scheduleBus.emitChanged();
-        }}
-      />
+      {/* 새 일정 모달 - projectId 있을 때만 렌더 */}
+      {!!projectId && (
+        <EventEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          projectId={projectId}
+          onSaved={async () => {
+            setEditorOpen(false);
+            invalidateSchedulesCache(projectId);
+            await refreshSchedules();
+            scheduleBus.emitChanged();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,39 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar as CalendarIcon,
-  Clock,
-  Plus,
-  Users,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Plus, Users,
+  FileText, ChevronDown, ChevronUp, AlertCircle,
 } from "lucide-react";
-import { listSchedulesInRange } from "@/api/schedules";
-// 생성 API 직접 호출 제거 -> EventEditor 모달로 전환
-import type {
-  ScheduleDto,
-  ScheduleType,
-  SchedulePriority,
-  EventType,
-} from "@/types/domain";
+import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
+import type { ScheduleDto, ScheduleType, SchedulePriority, EventType } from "@/types/domain";
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { scheduleBus } from "@/lib/schedule-bus";
 
 interface HorizontalCalendarProps {
   className?: string;
-  /** 지정하지 않으면 백엔드가 첫 프로젝트로 처리 */
+  /** 프로젝트 없으면 API 호출 스킵하고 N/A 플레이스홀더 */
   projectId?: number;
 }
 
@@ -67,7 +49,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
   const [events, setEvents] = useState<UiEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 새 일정 모달 상태 (제목은 빈값으로 시작)
+  // 새 일정 모달 상태
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorInitial, setEditorInitial] = useState<{
     id?: number;
@@ -97,7 +79,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     return start;
   };
 
-  // 현재 주/월 그리드
   const weekDays = useMemo(() => {
     const start = getStartOfWeek(today, currentOffset);
     return Array.from({ length: 7 }).map((_, i) => {
@@ -117,17 +98,14 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     const startDay = startOfMonth.getDay();
     const days: Date[] = [];
 
-    // 이전달 말일
     for (let i = startDay - 1; i >= 0; i--) {
       const prev = new Date(startOfMonth);
       prev.setDate(prev.getDate() - (i + 1));
       days.push(prev);
     }
-    // 이번달
     for (let d = 1; d <= endOfMonth.getDate(); d++) {
       days.push(new Date(startOfMonth.getFullYear(), startOfMonth.getMonth(), d));
     }
-    // 다음달 앞부분 (42칸 유지)
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       const next = new Date(endOfMonth);
@@ -171,6 +149,10 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
 
   /** 데이터 로딩 */
   const reload = async () => {
+    if (!projectId) {
+      setEvents([]);
+      return;
+    }
     setLoading(true);
     try {
       const rows = await listSchedulesInRange({
@@ -257,15 +239,12 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     return date.getMonth() === ref.getMonth() && date.getFullYear() === ref.getFullYear();
   };
 
-  /** 일정 추가 버튼 → 모달 열기(제목 하드코딩 제거) */
+  /** 일정 추가 버튼 → 모달 열기 */
   const onClickAdd = () => {
-    // 기준 날짜: 선택된 날짜가 있으면 해당 날짜, 없으면 보이는 범위의 시작일
     const base = selectedDate ? new Date(selectedDate) : new Date(fetchRange.from);
-    // 기본 시간: 10:00 ~ 10:30
     const start = new Date(base);
     start.setHours(10, 0, 0, 0);
     const end = new Date(start.getTime() + 30 * 60 * 1000);
-
     const toHHMM = (d: Date) =>
       `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
@@ -323,108 +302,115 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         </CardHeader>
 
         <CardContent>
-          {/* 요일 헤더 */}
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {DAY_LABELS.map((day, idx) => (
-              <div
-                key={day}
-                className={`text-center py-2 text-sm font-medium ${
-                  idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
-                }`}
-              >
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* 날짜 그리드 */}
-          <div
-            className={`grid grid-cols-7 gap-2 ${
-              isExpanded ? "grid-rows-6" : "grid-rows-1"
-            }`}
-          >
-            {displayDays.map((date) => {
-              const dayEvents = getEventsForDate(date);
-              const key = toYMD(date);
-              const inCurrentMonth = isCurrentMonth(date);
-              const maxEvents = isExpanded ? 4 : 2;
-              const minHeight = isExpanded ? "min-h-[150px]" : "min-h-[120px]";
-
-              return (
-                <div
-                  key={key}
-                  className={`
-                    ${minHeight} p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md
-                    ${isToday(date) ? "bg-primary/5 border-primary" : "border-border hover:border-primary/50"}
-                    ${isSelected(date) ? "ring-2 ring-primary ring-offset-2" : ""}
-                    ${!inCurrentMonth ? "opacity-50 bg-muted/20" : ""}
-                  `}
-                  onClick={() => setSelectedDate(key)}
-                >
+          {/* 여기는 App 가드 덕에 projectId 없는 상태로 렌더링되지 않지만,
+              혹시라도 대비해 플레이스홀더 처리 */}
+          {!projectId ? (
+            <div className="text-center py-16 text-sm text-muted-foreground">
+              참여 중인 프로젝트가 없어서 일정을 표시할 수 없습니다.
+            </div>
+          ) : (
+            <>
+              {/* 요일 헤더 */}
+              <div className="grid grid-cols-7 gap-1 mb-4">
+                {DAY_LABELS.map((day, idx) => (
                   <div
-                    className={`text-center mb-3 ${
-                      isToday(date)
-                        ? "font-bold text-primary"
-                        : inCurrentMonth
-                        ? ""
-                        : "text-muted-foreground"
-                    }`}
+                    key={day}
+                    className={`text-center py-2 text-sm font-medium ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
+                      }`}
                   >
-                    <span className="text-lg">{date.getDate()}</span>
+                    {day}
                   </div>
+                ))}
+              </div>
 
-                  <div className="space-y-1">
-                    {dayEvents.slice(0, maxEvents).map((event) => (
+              {/* 날짜 그리드 */}
+              <div
+                className={`grid grid-cols-7 gap-2 ${isExpanded ? "grid-rows-6" : "grid-rows-1"
+                  }`}
+              >
+                {displayDays.map((date) => {
+                  const dayEvents = getEventsForDate(date);
+                  const key = toYMD(date);
+                  const inCurrentMonth = isCurrentMonth(date);
+                  const maxEvents = isExpanded ? 4 : 2;
+                  const minHeight = isExpanded ? "min-h-[150px]" : "min-h-[120px]";
+
+                  return (
+                    <div
+                      key={key}
+                      className={`
+                        ${minHeight} p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md
+                        ${isToday(date) ? "bg-primary/5 border-primary" : "border-border hover:border-primary/50"}
+                        ${isSelected(date) ? "ring-2 ring-primary ring-offset-2" : ""}
+                        ${!inCurrentMonth ? "opacity-50 bg-muted/20" : ""}
+                      `}
+                      onClick={() => setSelectedDate(key)}
+                    >
                       <div
-                        key={event.id}
-                        className="text-xs p-1.5 rounded bg-muted/50 hover:bg-muted transition-colors"
+                        className={`text-center mb-3 ${isToday(date)
+                            ? "font-bold text-primary"
+                            : inCurrentMonth
+                              ? ""
+                              : "text-muted-foreground"
+                          }`}
                       >
-                        <div className="flex items-center gap-1 mb-1">
-                          {getTypeIcon(event.type, "h-2 w-2")}
-                          <span className="truncate font-medium">{event.title}</span>
-                        </div>
-                        {isExpanded && event.time && (
-                          <div className="text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-2 w-2" />
-                            <span>{event.time}</span>
+                        <span className="text-lg">{date.getDate()}</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        {dayEvents.slice(0, maxEvents).map((event) => (
+                          <div
+                            key={event.id}
+                            className="text-xs p-1.5 rounded bg-muted/50 hover:bg-muted transition-colors"
+                          >
+                            <div className="flex items-center gap-1 mb-1">
+                              {getTypeIcon(event.type, "h-2 w-2")}
+                              <span className="truncate font-medium">{event.title}</span>
+                            </div>
+                            {isExpanded && event.time && (
+                              <div className="text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-2 w-2" />
+                                <span>{event.time}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {dayEvents.length > maxEvents && (
+                          <div className="text-xs text-muted-foreground text-center py-1 font-medium">
+                            +{dayEvents.length - maxEvents}개 더 보기
                           </div>
                         )}
                       </div>
-                    ))}
+                    </div>
+                  );
+                })}
+              </div>
 
-                    {dayEvents.length > maxEvents && (
-                      <div className="text-xs text-muted-foreground text-center py-1 font-medium">
-                        +{dayEvents.length - maxEvents}개 더 보기
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 접기/펼치기 */}
-          <div className="flex justify-center mt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsExpanded((v) => !v)}
-              className="flex items-center gap-2"
-              disabled={loading}
-            >
-              {isExpanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  주간 보기로 접기
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  월간 보기로 펼치기
-                </>
-              )}
-            </Button>
-          </div>
+              {/* 접기/펼치기 */}
+              <div className="flex justify-center mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsExpanded((v) => !v)}
+                  className="flex items-center gap-2"
+                  disabled={loading}
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      주간 보기로 접기
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      월간 보기로 펼치기
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -499,16 +485,17 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         </Card>
       )}
 
-      {/* 새 일정 모달 (제목 직접 입력) */}
+      {/* 새 일정 모달 */}
       <EventEditor
         open={editorOpen}
         onOpenChange={setEditorOpen}
-        projectId={projectId ?? 1}
+        projectId={projectId!}
         initial={editorInitial}
         onSaved={async () => {
           setEditorOpen(false);
-          await reload(); // 로컬 UI 갱신
-          scheduleBus.emitChanged();  // 전역 변경 알림 (사이드바 등)
+          if (projectId) invalidateSchedulesCache(projectId);
+          await reload();
+          scheduleBus.emitChanged();
         }}
       />
     </div>
