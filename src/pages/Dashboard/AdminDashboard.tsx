@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 ﻿import { useEffect, useMemo, useState } from "react";
-=======
-﻿import React, { useState, useEffect } from "react";
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 import {
   Card,
   CardContent,
@@ -20,16 +16,11 @@ import {
   Database,
   Activity,
   TrendingUp,
-<<<<<<< HEAD
-=======
-  AlertCircle,
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
   Settings,
   Download,
 } from "lucide-react";
 import { listProjects } from "@/api/projects";
 import { getProjectDashboardStatus } from "@/api/dashboard";
-<<<<<<< HEAD
 import type { ProjectListDto, ProjectStatus, DashboardStatus } from "@/types/domain";
 
 interface AdminDashboardProps {
@@ -43,15 +34,6 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
   planning: "기획",
 };
 
-=======
-import type { ProjectListDto, DashboardStatus } from "@/types/domain";
-
-interface AdminDashboardProps {
-  // API는 프로젝트 단위로 제공되어 있어 당장은 하나의 projectId만 사용합니다.
-  projectId: number;
-}
-
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 export function AdminDashboard({ projectId }: AdminDashboardProps) {
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
   const [status, setStatus] = useState<DashboardStatus | null>(null);
@@ -61,11 +43,6 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
     const fetchData = async () => {
       try {
         setLoading(true);
-<<<<<<< HEAD
-=======
-        // NOTE: 관리자 대시보드는 전역 API가 더 어울리지만,
-        // 지금은 프로젝트 목록과 특정 프로젝트의 상태를 예시로 사용합니다.
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
         const [projectData, statusData] = await Promise.all([
           listProjects(),
           getProjectDashboardStatus(projectId),
@@ -83,7 +60,6 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
   }, [projectId]);
 
   const systemStats = {
-<<<<<<< HEAD
     totalUsers: "N/A", // TODO: 사용자 수 API
     activeCourses: "N/A", // TODO: 과목 수 API
     totalProjects: projects.length,
@@ -97,28 +73,6 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
     if (pct >= 40) return "warning";
     return "error";
   }, [status]);
-=======
-    totalUsers: "N/A", // TODO: 사용자 수 API 필요
-    activeCourses: "N/A", // TODO: 과목 수 API 필요
-    totalProjects: projects.length,
-    systemUptime: 99.9, // 예시 값
-  };
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "user_registration":
-        return <Users className="h-4 w-4 text-blue-500" />;
-      case "course_creation":
-        return <BookOpen className="h-4 w-4 text-green-500" />;
-      case "system_backup":
-        return <Database className="h-4 w-4 text-purple-500" />;
-      case "error":
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return <Activity className="h-4 w-4 text-gray-500" />;
-    }
-  };
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 
   const getStatusBadge = (val: string) => {
     const s = (val || "").toLowerCase();
@@ -214,11 +168,7 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-<<<<<<< HEAD
         {/* 프로젝트 현황 */}
-=======
-        {/* 프로젝트(과목) 현황 */}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -239,7 +189,6 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
               {projects.map((project) => (
                 <div key={project.id} className="p-4 border rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-<<<<<<< HEAD
                     <h3 className="font-medium">{project.name}</h3>
                     <Badge variant="secondary">
                       {STATUS_LABEL[project.status]}
@@ -258,20 +207,6 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
                       </span>
                       <Progress value={project.progress} className="w-24 h-2" />
                     </div>
-=======
-                    <h3 className="font-medium">
-                      {project.name ?? "이름 없음"}
-                    </h3>
-                    <Badge variant="secondary">{project.status ?? "N/A"}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    담당: 정보 없음
-                  </p>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>팀: {project.teamId ?? "N/A"}</span>
-                    {/* TODO: 진행률 데이터 API 연동 필요 */}
-                    <Progress value={50} className="w-24 h-2" />
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                   </div>
                 </div>
               ))}
@@ -305,13 +240,7 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>시스템 상태</CardTitle>
-<<<<<<< HEAD
               <CardDescription>현재 플랫폼/프로젝트의 상태 요약</CardDescription>
-=======
-              <CardDescription>
-                현재 플랫폼/프로젝트의 상태 요약
-              </CardDescription>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
             </div>
             <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
@@ -325,24 +254,14 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
               <div>
                 <p className="font-medium">서비스 헬스</p>
                 <p className="text-sm text-muted-foreground">
-<<<<<<< HEAD
                   현재 상태: {healthLevel} (진행률 {status?.progressPct ?? 0}%)
                 </p>
               </div>
               <div className="text-right">{getStatusBadge(healthLevel)}</div>
-=======
-                  현재 상태: {status?.health ?? "unknown"}
-                </p>
-              </div>
-              <div className="text-right">
-                {getStatusBadge(status?.health ?? "unknown")}
-              </div>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
             </div>
 
             <div className="flex items-center justify-between p-4 border rounded-lg">
               <div>
-<<<<<<< HEAD
                 <p className="font-medium">최종 업데이트</p>
                 <p className="text-sm text-muted-foreground">
                   {status?.lastUpdate
@@ -351,20 +270,10 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
                 </p>
               </div>
               <div className="text-right">{getStatusBadge(healthLevel)}</div>
-=======
-                <p className="font-medium">에러/경고</p>
-                <p className="text-sm text-muted-foreground">API 필요</p>
-              </div>
-              <div className="text-right">{getStatusBadge("unknown")}</div>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
             </div>
           </div>
         </CardContent>
       </Card>
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 ﻿import { useEffect, useMemo, useState, useCallback } from "react";
-=======
-﻿import React, { useState, useEffect } from "react";
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 import {
   Card,
   CardContent,
@@ -14,17 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CalendarWidget } from "@/components/Dashboard/CalendarWidget";
-<<<<<<< HEAD
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { scheduleBus } from "@/lib/schedule-bus";
-=======
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 import {
   Calendar,
   Users,
   FileText,
   GitBranch,
-<<<<<<< HEAD
   CheckCircle,
   AlertCircle,
   Plus,
@@ -79,28 +71,6 @@ function TypeIcon({
 }
 
 /* ===== component ===== */
-=======
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Plus,
-} from "lucide-react";
-import {
-  getProjectDashboardSummary,
-  getProjectDashboardDeadlines,
-} from "@/api/dashboard";
-import { listProjectFeedback } from "@/api/feedback";
-import { listProjects } from "@/api/projects";
-import { listTeams } from "@/api/teams";
-import type {
-  DashboardSummary,
-  DeadlineItem,
-  FeedbackDto,
-  ProjectListDto,
-  TeamListDto,
-} from "@/types/domain";
-
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 interface StudentDashboardProps {
   projectId: number;
 }
@@ -109,7 +79,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [project, setProject] = useState<ProjectListDto | null>(null);
   const [team, setTeam] = useState<TeamListDto | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-<<<<<<< HEAD
   const [feedback, setFeedback] = useState<FeedbackDto[]>([]);
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
   const [tab, setTab] = useState<STab>("all");
@@ -145,41 +114,17 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           getProjectDashboardSummary(projectId),
           listProjectFeedback(projectId),
         ]);
-=======
-  const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
-  const [feedback, setFeedback] = useState<FeedbackDto[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [projects, teams, summaryData, deadlinesData, feedbackData] =
-          await Promise.all([
-            listProjects(),
-            listTeams(),
-            getProjectDashboardSummary(projectId),
-            getProjectDashboardDeadlines(projectId),
-            listProjectFeedback(projectId),
-          ]);
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 
         const currentProject = projects.find((p) => p.id === projectId) ?? null;
         setProject(currentProject);
 
-<<<<<<< HEAD
         if (currentProject?.team) {
           const currentTeam =
             teams.find((t) => t.name === currentProject.team) ?? null;
-=======
-        if (currentProject?.teamId) {
-          const currentTeam = teams.find((t) => t.id === currentProject.teamId) ?? null;
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
           setTeam(currentTeam);
         }
 
         setSummary(summaryData);
-<<<<<<< HEAD
         setFeedback(feedbackData);
 
         // 일정
@@ -219,27 +164,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   return (
     <div className="space-y-6">
       {/* 상단 요약 */}
-=======
-        setDeadlines(deadlinesData);
-        setFeedback(feedbackData);
-      } catch (error) {
-        console.error("Failed to fetch student dashboard data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [projectId]);
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* 상단 요약 카드 */}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
@@ -248,13 +172,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
-<<<<<<< HEAD
                 <p className="text-2xl font-semibold">{tasksInProgress}</p>
-=======
-                <p className="text-2xl font-semibold">
-                  {summary?.tasksTotal ?? "N/A"}
-                </p>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 <p className="text-sm text-muted-foreground">진행 중인 과제</p>
               </div>
             </div>
@@ -268,13 +186,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <Users className="h-5 w-5 text-chart-2" />
               </div>
               <div>
-<<<<<<< HEAD
                 <p className="text-2xl font-semibold">{memberCount ?? "N/A"}</p>
-=======
-                <p className="text-2xl font-semibold">
-                  {team?.memberCount ?? "N/A"}
-                </p>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 <p className="text-sm text-muted-foreground">팀원 수</p>
               </div>
             </div>
@@ -303,11 +215,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
               </div>
               <div>
                 <p className="text-2xl font-semibold">
-<<<<<<< HEAD
                   {tasksDone}/{tasksTotal}
-=======
-                  {summary?.tasksDone ?? 0}/{summary?.tasksTotal ?? 0}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 </p>
                 <p className="text-sm text-muted-foreground">완료 현황</p>
               </div>
@@ -329,39 +237,20 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <h3 className="font-medium">
                   {project?.name ?? "프로젝트명을 불러오는 중…"}
                 </h3>
-<<<<<<< HEAD
                 <Badge variant="secondary">{progressRate}% 진행</Badge>
               </div>
               <Progress value={progressRate} className="h-2" />
-=======
-                <Badge variant="secondary">
-                  {summary?.progressRate ?? 0}% 진행
-                </Badge>
-              </div>
-              <Progress value={summary?.progressRate ?? 0} className="h-2" />
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
-<<<<<<< HEAD
                 <span>{memberCount ?? "N/A"}명 팀원</span>
-=======
-                <span>{team?.memberCount ?? "N/A"}명 팀원</span>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
               </div>
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <span>
-<<<<<<< HEAD
                   최종 업데이트: {formatDateK(project?.lastUpdate)}
-=======
-                  최종 업데이트:{" "}
-                  {project?.updatedAt
-                    ? new Date(project.updatedAt).toLocaleDateString("ko-KR")
-                    : "N/A"}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 </span>
               </div>
             </div>
@@ -379,7 +268,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           </CardContent>
         </Card>
 
-<<<<<<< HEAD
         {/* 다가오는 일정 - 탭 */}
         <Card>
           <CardHeader>
@@ -458,41 +346,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
               {upcomingItems.length === 0 && (
                 <div className="text-sm text-muted-foreground text-center py-4">
                   해당 분류의 예정 일정이 없습니다.
-=======
-        {/* 다가오는 일정 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>다가오는 일정</CardTitle>
-            <CardDescription>마감일이 임박한 과제들</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {deadlines.map((task, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 border rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                    <div>
-                      <p className="font-medium text-sm">{task.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        마감:{" "}
-                        {task.dueDate
-                          ? new Date(task.dueDate).toLocaleDateString("ko-KR")
-                          : "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button size="sm" variant="outline">
-                    시작
-                  </Button>
-                </div>
-              ))}
-              {deadlines.length === 0 && (
-                <div className="text-sm text-muted-foreground text-center py-4">
-                  예정된 마감이 없습니다.
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                 </div>
               )}
             </div>
@@ -500,11 +353,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         </Card>
       </div>
 
-<<<<<<< HEAD
       {/* 월간 캘린더 위젯 */}
-=======
-      {/* 캘린더 위젯 */}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
       <CalendarWidget />
 
       {/* 최근 피드백 */}
@@ -513,13 +362,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>최근 피드백</CardTitle>
-<<<<<<< HEAD
               <CardDescription>교수/멘토로부터의 최신 피드백</CardDescription>
-=======
-              <CardDescription>
-                교수/멘토로부터의 최신 피드백
-              </CardDescription>
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
             </div>
             <Button variant="outline" size="sm">
               <Plus className="h-4 w-4 mr-2" />
@@ -534,13 +377,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <div className="flex items-center justify-between mb-2">
                   <Badge variant="outline">{fb.author ?? "작성자"}</Badge>
                   <span className="text-xs text-muted-foreground">
-<<<<<<< HEAD
                     {formatDateK(fb.createdAt)}
-=======
-                    {fb.createdAt
-                      ? new Date(fb.createdAt).toLocaleDateString("ko-KR")
-                      : "N/A"}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
                   </span>
                 </div>
                 <p className="text-sm">{fb.content}</p>
@@ -554,7 +391,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           </div>
         </CardContent>
       </Card>
-<<<<<<< HEAD
 
       {/* 새 일정 모달 (저장 후 재조회) */}
       <EventEditor
@@ -570,8 +406,3 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
     </div>
   );
 }
-=======
-    </div>
-  );
-}
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

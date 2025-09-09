@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-﻿/** ------------ Projects ------------- */
+/** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
 export interface ProjectListDto {
@@ -40,41 +39,6 @@ export interface TeamListDto {
 }
 
 /** 피드백 (기존 페이지 호환) */
-=======
-﻿export interface ProjectListDto {
-  id: number;
-  name?: string;
-  status?: string;    // "ACTIVE" | "INACTIVE" | etc
-  teamId?: number;
-  createdAt?: string; // ISO
-  updatedAt?: string; // ISO
-}
-
-export interface TeamListDto {
-  id: number;
-  name?: string;
-  projectId?: number;
-  memberCount?: number;
-}
-
-export interface ScheduleDto {
-  id: number;
-  projectId?: number;
-  title?: string;
-  dueDate?: string;   // ISO (YYYY-MM-DD)
-  assignee?: string;
-}
-
-export interface EventDto {
-  id: number;
-  projectId?: number;
-  title?: string;
-  startAt?: string; // ISO
-  endAt?: string;   // ISO
-  type?: string;
-}
-
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
 export interface FeedbackDto {
   id: number;
   projectId?: number;
@@ -84,7 +48,6 @@ export interface FeedbackDto {
   createdAt?: string; // ISO
 }
 
-<<<<<<< HEAD
 /** ----- Dashboard DTO (백엔드와 1:1) ----- */
 export interface DashboardSummary {
   progressPct: number;
@@ -164,23 +127,3 @@ export interface UserDto {
   name: string;
   email: string;
 }
-=======
-export interface DashboardSummary {
-  progressRate?: number;
-  tasksTotal?: number;
-  tasksDone?: number;
-}
-
-export interface DashboardStatus {
-  health?: string;
-  riskCount?: number;
-}
-
-export interface DeadlineItem {
-  title?: string;
-  dueDate?: string; // ISO
-  assignee?: string;
-}
-
-
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

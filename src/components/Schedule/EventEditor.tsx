@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import type { EventType } from "@/types/domain";
 import { createEvent, updateEvent } from "@/api/events";
+import { scheduleBus } from "@/lib/schedule-bus";
 
 /* ---------- helpers ---------- */
 function toISO(dateYmd: string, timeHm?: string | ""): string {
@@ -103,6 +104,7 @@ export function EventEditor({
         });
       }
       onSaved?.();
+      scheduleBus.emitChanged(); //저장 성공하면 전역으로 변경 알림
     } catch (e: any) {
       alert(e?.message ?? "저장에 실패했습니다.");
     }

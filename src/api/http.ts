@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-﻿﻿import axios from "axios";
-=======
-﻿import axios from "axios";
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938
+import axios from "axios";
 
 export const http = axios.create({
   baseURL: "/api",
@@ -20,10 +16,4 @@ http.interceptors.response.use(
       data,
     });
   }
-<<<<<<< HEAD
 );
-=======
-);
-
-
->>>>>>> eb9bb80ff9e1797f98fc85fa60bc6981315e4938

@@ -61,5 +61,3 @@ function Slider({
 }
 
 export { Slider };
-
-
