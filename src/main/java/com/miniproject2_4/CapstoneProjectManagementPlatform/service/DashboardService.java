@@ -1,16 +1,16 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProfessorSummaryDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,19 +36,10 @@ public class DashboardService {
         public record Milestone(String title, String date) {}
     }
 
-    public record Status(
-            int progressPct,
-            String lastUpdate,
-            List<String> actions
-    ) {}
+    public record Status(int progressPct, String lastUpdate, List<String> actions) {}
+    public record DeadlineItem(String title, String dueDate) {}
 
-    public record DeadlineItem(
-            String title,
-            String dueDate
-    ) {}
-
-    /* ========= Queries ========= */
-
+    /* ========= 기존 Project 단위 대시보드 ========= */
     public Summary getSummary(Long projectId) {
         Project p = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
@@ -75,7 +66,7 @@ public class DashboardService {
         return new Summary(
                 progressPct,
                 memberCount,
-                0, // commit data 없음
+                0,
                 new Summary.Assignments(open, inProgress, closed),
                 ms
         );
@@ -104,5 +95,132 @@ public class DashboardService {
                 .limit(Math.max(0, limit))
                 .map(a -> new DeadlineItem(a.getTitle(), a.getDueDate().format(ISO)))
                 .toList();
+    }
+
+    /* ========= 교수 대시보드 요약 ========= */
+    public ProfessorSummaryDto getProfessorSummary(Long professorUserId) {
+        // 담당/참여 교수 기준: 팀 멤버십으로 연계
+        List<Project> myProjects = projectRepository.findAllByProfessorUserId(professorUserId);
+        if (myProjects.isEmpty()) {
+            return new ProfessorSummaryDto(
+                    new ProfessorSummaryDto.Metrics(0, 0, 0, 0.0, 0),
+                    List.of(), List.of(), List.of()
+            );
+        }
+
+        List<Long> projectIds = myProjects.stream().map(Project::getId).toList();
+
+        // 프로젝트별 과제
+        List<Assignment> allAssignments = assignmentRepository.findByProject_IdIn(projectIds);
+        Map<Long, List<Assignment>> byProject = allAssignments.stream()
+                .collect(Collectors.groupingBy(a -> a.getProject().getId()));
+
+        // 메트릭 계산
+        int courses = myProjects.size();
+        int runningTeams = (int) myProjects.stream()
+                .map(Project::getTeam).filter(Objects::nonNull)
+                .map(Team::getId).distinct().count();
+
+        // 학생 수(중복 제거, 교수/관리자 제외)
+        List<Long> teamIds = myProjects.stream()
+                .map(Project::getTeam).filter(Objects::nonNull)
+                .map(Team::getId).distinct().toList();
+        int studentCount = teamIds.isEmpty() ? 0 :
+                (int) teamMemberRepository.countDistinctMembersByTeamIdsAndUserRole(teamIds, Role.STUDENT);
+
+        // “검토 대기”: PENDING 이거나, ONGOING & 마감 D<=7(또는 경과)
+        var now = LocalDateTime.now();
+        int pendingReviews = (int) allAssignments.stream()
+                .filter(a -> isPendingForReview(a, now))
+                .count();
+
+        // 평균 진행률
+        double avgProgress = myProjects.stream().mapToDouble(p -> {
+            List<Assignment> list = byProject.getOrDefault(p.getId(), List.of());
+            if (list.isEmpty()) return 0.0;
+            long closed = list.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count();
+            return (closed * 100.0) / list.size();
+        }).average().orElse(0.0);
+        avgProgress = Math.round(avgProgress * 10.0) / 10.0;
+
+        // 검토 대기 목록
+        ZoneId zone = ZoneId.systemDefault();
+        List<ProfessorSummaryDto.PendingReviewItem> pending = allAssignments.stream()
+                .filter(a -> isPendingForReview(a, now))
+                .sorted(Comparator.comparing(
+                        a -> Optional.ofNullable(a.getDueDate()).orElse(LocalDateTime.MAX)
+                ))
+                .limit(20)
+                .map(a -> new ProfessorSummaryDto.PendingReviewItem(
+                        a.getId(),
+                        a.getProject().getId(),
+                        a.getProject().getTitle(),
+                        a.getProject().getTeam() != null ? a.getProject().getTeam().getName() : null,
+                        a.getTitle(),
+                        toOffset(a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getDueDate(), zone)
+                ))
+                .toList();
+
+        // 최근 제출물
+        List<ProfessorSummaryDto.RecentSubmission> recent = allAssignments.stream()
+                .sorted(Comparator.comparing((Assignment a) ->
+                        Optional.ofNullable(a.getUpdatedAt()).orElse(
+                                a.getDueDate() != null ? a.getDueDate() : LocalDateTime.MIN
+                        )
+                ).reversed())
+                .limit(10)
+                .map(a -> new ProfessorSummaryDto.RecentSubmission(
+                        a.getId(),
+                        a.getProject().getId(),
+                        a.getProject().getTitle(),
+                        a.getProject().getTeam() != null ? a.getProject().getTeam().getName() : null,
+                        a.getTitle(),
+                        toOffset(a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getDueDate(), zone),
+                        a.getStatus().name()
+                ))
+                .toList();
+
+        // 상위 성과 팀
+        List<ProfessorSummaryDto.TopTeam> top = myProjects.stream()
+                .map(p -> {
+                    List<Assignment> list = byProject.getOrDefault(p.getId(), List.of());
+                    double prog = 0.0;
+                    if (!list.isEmpty()) {
+                        long closed = list.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count();
+                        prog = (closed * 100.0) / list.size();
+                    }
+                    return new AbstractMap.SimpleEntry<>(p, Math.round(prog * 10.0) / 10.0);
+                })
+                .sorted((e1, e2) -> Double.compare(e2.getValue(), e1.getValue()))
+                .limit(5)
+                .map(e -> new ProfessorSummaryDto.TopTeam(
+                        e.getKey().getTeam() != null ? e.getKey().getTeam().getId() : null,
+                        e.getKey().getTeam() != null ? e.getKey().getTeam().getName() : null,
+                        e.getKey().getId(),
+                        e.getKey().getTitle(),
+                        e.getValue()
+                ))
+                .toList();
+
+        return new ProfessorSummaryDto(
+                new ProfessorSummaryDto.Metrics(runningTeams, pendingReviews, courses, avgProgress, studentCount),
+                pending, recent, top
+        );
+    }
+
+    /** 검토대기 판단 로직을 별도 메서드로 분리 (지역 함수 금지 보완) */
+    private static boolean isPendingForReview(Assignment a, LocalDateTime now) {
+        if (a == null) return false;
+        if (a.getStatus() == AssignmentStatus.PENDING) return true;
+        if (a.getStatus() == AssignmentStatus.ONGOING && a.getDueDate() != null) {
+            LocalDateTime within7d = now.plusDays(7);
+            return !a.getDueDate().isAfter(within7d); // 기한이 지났거나 7일 이내
+        }
+        return false;
+    }
+
+    private static OffsetDateTime toOffset(LocalDateTime ts, ZoneId zone) {
+        if (ts == null) return null;
+        return ts.atZone(zone).toOffsetDateTime();
     }
 }
