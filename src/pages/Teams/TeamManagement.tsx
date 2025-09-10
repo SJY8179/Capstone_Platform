@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -12,7 +12,8 @@ import {
 import { UserRole } from "@/App";
 import { listTeams, listInvitableUsers } from "@/api/teams";
 import type { TeamListDto, UserDto } from "@/types/domain";
-import { InviteMemberModal } from "@/components/modal/InviteMemberModal";
+import { InviteMemberModal } from "@/components/Teams/InviteMemberModal";
+import { CreateTeamModal } from "@/components/Teams/CreateTeamModal";
 
 interface TeamManagementProps {
   userRole: UserRole;
@@ -28,11 +29,14 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // modal state
+  // 팀원 초대 modal state
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<TeamListDto | null>(null);
   const [invitableUsers, setInvitableUsers] = useState<UserDto[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
+
+  // 팀 생성 modal state
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -47,12 +51,21 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
   }, []);
 
   const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase();
+    const qq = q.trim().toLowerCase().replace(/\s/g, '');
+    if (!qq) return teams;
     return teams.filter(
-      (t) =>
-        t.name.toLowerCase().includes(qq) ||
-        t.project.toLowerCase().includes(qq) ||
-        t.members.some((m) => m.name.toLowerCase().includes(qq))
+      (t) => {
+        const teamName = t.name.toLowerCase().replace(/\s/g, '');
+        const projectName = t.project.toLowerCase().replace(/\s/g, '');
+        
+        return (
+          teamName.includes(qq) ||
+          projectName.includes(qq) ||
+          t.members.some((m) =>
+            m.name.toLowerCase().replace(/\s/g, "").includes(qq)
+          )
+        );
+      }
     );
   }, [teams, q]);
 
@@ -63,7 +76,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     try {
       setInvitableUsers(await listInvitableUsers(team.id));
     } catch (error) {
-      console.error("Failed to fetch invitable users:", error);
+      console.error("[팀원 초대 목록 오류]Failed to fetch team member list:", error);
     } finally {
       setIsUsersLoading(false);
     }
@@ -73,6 +86,29 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     setIsInviteModalOpen(false);
     setSelectedTeam(null);
     setInvitableUsers([]);
+  };
+
+  const handleInviteSuccess = (teamId: number, newUser: UserDto) => {
+    setTeams(currentTeams =>
+      currentTeams.map(team => {
+        if (team.id === teamId) {
+          const newMember = {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            // avatar?: string | undefined,
+            role: "member" as const,
+            status: "active" as const,
+          };
+          return { ...team, members: [...team.members, newMember] };
+        }
+        return team;
+      })
+    );
+  };
+
+  const handleCreateSuccess = (newTeam: TeamListDto) => {
+    setTeams(currentTeams => [newTeam, ...currentTeams]);
   };
 
   const actions = (team: TeamListDto) => (
@@ -116,7 +152,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <p className="text-muted-foreground">팀을 구성하고 협업을 진행하세요.</p>
         </div>
         {userRole === "student" && (
-          <Button>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> 새 팀 생성
           </Button>
         )}
@@ -133,6 +169,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
         />
       </div>
 
+      {/* 팀 목록 */}
       <div className="space-y-6">
         {filtered.map((t) => {
           const { stats } = t;
@@ -144,11 +181,10 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     {t.name}
                     <Badge variant="secondary">{t.project}</Badge>
                   </CardTitle>
-                  <CardDescription>{t.description ?? "팀 소개가 없습니다."}</CardDescription>
+                  <CardDescription>{t.description || "팀 소개가 없습니다."}</CardDescription>
                 </div>
                 <div className="flex gap-2">{actions(t)}</div>
               </CardHeader>
-
               <CardContent className="space-y-4">
                 {/* 팀장 */}
                 <div className="text-sm">
@@ -186,7 +222,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     <div className="text-xs text-muted-foreground mb-1">총 커밋</div>
                     <div className="text-2xl font-semibold flex items-center gap-2">
                       <GitBranch className="h-5 w-5" />
-                      {stats.commits}
+                      {stats?.commits ?? 0}
                     </div>
                   </div>
 
@@ -194,7 +230,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     <div className="text-xs text-muted-foreground mb-1">회의 횟수</div>
                     <div className="text-2xl font-semibold flex items-center gap-2">
                       <CalendarDays className="h-5 w-5" />
-                      {stats.meetings}
+                      {stats?.meetings ?? 0}
                     </div>
                   </div>
 
@@ -202,7 +238,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     <div className="text-xs text-muted-foreground mb-1">완료/전체 작업</div>
                     <div className="text-2xl font-semibold flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5" />
-                      {stats.tasks.completed}/{stats.tasks.total}
+                      {stats?.tasks?.completed ?? 0}/{stats?.tasks?.total ?? 0}
                     </div>
                   </div>
                 </div>
@@ -216,17 +252,25 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           );
         })}
 
-        <InviteMemberModal
-          isOpen={isInviteModalOpen}
-          onClose={handleCloseInviteModal}
-          team={selectedTeam}
-          users={invitableUsers}
-          isLoading={isUsersLoading}
-        />
         {!loading && filtered.length === 0 && (
           <div className="text-center text-muted-foreground py-12">표시할 팀이 없습니다.</div>
         )}
       </div>
-    </div>
+
+      <InviteMemberModal
+        isOpen={isInviteModalOpen}
+        onClose={handleCloseInviteModal}
+        team={selectedTeam}
+        users={invitableUsers}
+        isLoading={isUsersLoading}
+        onInviteSuccess={handleInviteSuccess}
+      />
+
+      <CreateTeamModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreateSuccess={handleCreateSuccess}
+      />
+    </div >
   );
 }
