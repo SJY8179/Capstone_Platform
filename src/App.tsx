@@ -11,6 +11,7 @@ import { TeamManagement } from "@/pages/Teams/TeamManagement";
 import { EvaluationSystem } from "@/pages/Evaluation/EvaluationSystem";
 import { UserManagement } from "@/pages/Admin/UserManagement";
 import { ScheduleManagement } from "@/pages/Schedule/ScheduleManagement";
+import  ProjectAssignments from "@/pages/Projects/Assignments";
 import { http } from "@/api/http";
 import { Toaster } from "@/components/ui/sonner";
 import type { User } from "@/types/user";
@@ -22,6 +23,7 @@ export type ActivePage =
   | "evaluation"
   | "users"
   | "schedule"
+  | "assignments"   // ✅ 추가
   | "settings";
 
 export default function App() {
@@ -124,8 +126,8 @@ export default function App() {
   }
 
   const renderMainContent = () => {
-    // 평가만 프로젝트 필요 (일정은 프로젝트 없어도 진입 → 빈 목록 + 추가 가능)
-    const needProject = activePage === "evaluation";
+    // ✅ 과제/평가는 프로젝트가 필요
+    const needProject = activePage === "evaluation" || activePage === "assignments";
 
     if (needProject && !activeProjectId) {
       return (
@@ -175,6 +177,9 @@ export default function App() {
             projectId={activeProjectId ?? undefined}
           />
         );
+
+      case "assignments":   // ✅ 과제 페이지 렌더
+        return <ProjectAssignments projectId={activeProjectId!} />;
 
       default:
         return <div>페이지를 찾을 수 없습니다.</div>;

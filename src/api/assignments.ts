@@ -21,7 +21,11 @@ export async function createAssignment(
 ) {
   const { data } = await http.post<Assignment>(
     `/projects/${projectId}/assignments`,
-    { title: payload.title, dueDateIso: payload.dueDateIso, status: payload.status }
+    {
+      title: payload.title,
+      dueDateIso: payload.dueDateIso,
+      status: payload.status,
+    }
   );
   return data;
 }
@@ -60,12 +64,27 @@ export async function changeAssignmentStatus(
 /** 상태 변경 (일괄) */
 export async function bulkChangeAssignments(
   projectId: number,
-  payload: { assignmentIds: number[]; status: "COMPLETED" | "ONGOING" | "PENDING" }
+  payload: {
+    assignmentIds: number[];
+    status: "COMPLETED" | "ONGOING" | "PENDING";
+  }
 ) {
   await http.post(`/projects/${projectId}/assignments/status-bulk`, payload);
 }
 
 /** 삭제 */
-export async function deleteAssignment(projectId: number, assignmentId: number) {
+export async function deleteAssignment(
+  projectId: number,
+  assignmentId: number
+) {
   await http.delete(`/projects/${projectId}/assignments/${assignmentId}`);
+}
+
+/** 검토 요청(학생) — 백엔드 상태 변경 API로 대체 */
+export async function requestReview(
+  projectId: number,
+  assignmentId: number,
+  _message?: string
+) {
+  return changeAssignmentStatus(projectId, assignmentId, "PENDING");
 }

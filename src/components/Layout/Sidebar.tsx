@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Clock,
   AlertCircle,
+  ListChecks,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -64,8 +65,12 @@ export function Sidebar({
     const common = [
       { id: "dashboard" as ActivePage, label: "대시보드", icon: Home },
       { id: "projects" as ActivePage, label: "프로젝트", icon: FolderOpen },
+      { id: "assignments" as ActivePage, label: "과제", icon: ListChecks }, // ✅ 추가
     ];
-    const student = [...common, { id: "teams" as ActivePage, label: "팀 관리", icon: Users }];
+    const student = [
+      ...common,
+      { id: "teams" as ActivePage, label: "팀 관리", icon: Users },
+    ];
     const professor = [
       ...common,
       { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
@@ -123,11 +128,9 @@ export function Sidebar({
 
       setUpcoming(mapped);
     } catch (e: any) {
-      // 403이면 ‘권한 없음’으로 간주하고 조용히 비우기
       if (e?.status === 403 || e?.response?.status === 403) {
         setUpcoming([]);
       } else {
-        // 그 외 오류는 개발 중에만 보자
         console.debug("Failed to load upcoming schedules:", e);
         setUpcoming([]);
       }
@@ -139,7 +142,6 @@ export function Sidebar({
   useEffect(() => {
     reloadUpcoming();
     const unsub = scheduleBus.subscribe(() => {
-      // 저장/삭제 직후 캐시 무효화 후 재조회
       if (projectId) invalidateSchedulesCache(projectId);
       reloadUpcoming();
     });
