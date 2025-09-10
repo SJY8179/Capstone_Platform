@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Plus,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { getProfessorSummary, type ProfessorSummary } from "@/api/dashboard";
 import { toast } from "sonner";
@@ -61,6 +62,9 @@ const TEXTS = {
   requestInvite: "초대 요청",
 };
 
+type ReviewStatus = "PENDING" | "ONGOING" | "COMPLETED";
+type RecentTab = "ALL" | ReviewStatus;
+
 interface ProfessorDashboardProps {
   projectId?: number;
 }
@@ -74,12 +78,27 @@ function fmtDateTime(iso?: string | null) {
   }
 }
 
+/** 상태 배지 스타일(신규 컴포넌트 없이 클래스만 통일) */
+function statusBadgeClass(s?: string | null) {
+  switch (s) {
+    case "PENDING":
+      return "bg-amber-100 text-amber-700 border border-amber-200";
+    case "ONGOING":
+      return "bg-blue-100 text-blue-700 border border-blue-200";
+    case "COMPLETED":
+      return "bg-emerald-100 text-emerald-700 border border-emerald-200";
+    default:
+      return "bg-muted text-foreground";
+  }
+}
+
 export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   const [data, setData] = useState<ProfessorSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [recentTab, setRecentTab] = useState<RecentTab>("ALL");
 
   /** 공통 로더 */
   const load = async () => {
@@ -124,7 +143,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   function patchRecentStatus(
     prev: ProfessorSummary,
     assignmentId: number,
-    status: "COMPLETED" | "ONGOING" | "PENDING"
+    status: ReviewStatus
   ): ProfessorSummary {
     const recent = prev.recentSubmissions?.map((s) =>
       s.assignmentId === assignmentId ? { ...s, status } : s
@@ -163,7 +182,8 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
         ),
       } as ProfessorSummary;
 
-      const statusAfter = action === "APPROVE" ? "COMPLETED" : "ONGOING";
+      const statusAfter: ReviewStatus =
+        action === "APPROVE" ? "COMPLETED" : "ONGOING";
       return patchRecentStatus(afterRemove, assignmentId, statusAfter);
     });
 
@@ -227,8 +247,15 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     (data?.recentSubmissions?.length ?? 0) === 0 &&
     (data?.topTeams?.length ?? 0) === 0;
 
+  /** 최근 제출물 탭 필터링(프론트에서만 적용) */
+  const recentFiltered =
+    data?.recentSubmissions?.filter((s) =>
+      recentTab === "ALL" ? true : s.status === recentTab
+    ) ?? [];
+
   return (
     <div className="space-y-6">
+      {/* 헤더 + 새로고침 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-2xl font-semibold">{TEXTS.headerTitle}</h2>
@@ -236,16 +263,30 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           )}
         </div>
-        <div>
-          <p className="text-muted-foreground">{TEXTS.headerDescription}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground hidden md:block">
+            {TEXTS.headerDescription}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={refreshSummary}
+            disabled={refreshing || bulkLoading}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
+            새로고침
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => (projectId ? null : setNeedProjectOpen(true))}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {TEXTS.newSchedule}
+          </Button>
         </div>
-        <Button
-          size="sm"
-          onClick={() => (projectId ? null : setNeedProjectOpen(true))}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          {TEXTS.newSchedule}
-        </Button>
       </div>
 
       {/* 프로젝트 없음 콜아웃 */}
@@ -384,15 +425,13 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                   <div className="text-sm text-muted-foreground">
                     {item.projectName ?? "프로젝트"}
                     {item.teamName ? ` • ${item.teamName}` : ""}{" "}
-                    {item.submittedAt
-                      ? `• ${fmtDateTime(item.submittedAt)}`
-                      : ""}
+                    {item.submittedAt ? `• ${fmtDateTime(item.submittedAt)}` : ""}
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    disabled={bulkLoading}
+                    disabled={bulkLoading || refreshing}
                     onClick={() =>
                       handleSingle("REJECT", item.assignmentId, item.projectId)
                     }
@@ -400,7 +439,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                     반려
                   </Button>
                   <Button
-                    disabled={bulkLoading}
+                    disabled={bulkLoading || refreshing}
                     onClick={() =>
                       handleSingle("APPROVE", item.assignmentId, item.projectId)
                     }
@@ -422,15 +461,47 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
       {/* 최근 제출물 / 상위 성과 팀 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>{TEXTS.recentSubmissionsTitle}</CardTitle>
-            <CardDescription>
-              {TEXTS.recentSubmissionsDescription}
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-3">
+            <div>
+              <CardTitle>{TEXTS.recentSubmissionsTitle}</CardTitle>
+              <CardDescription>
+                {TEXTS.recentSubmissionsDescription}
+              </CardDescription>
+            </div>
+
+            {/* 최근 제출물 상태 탭(ALL/PENDING/ONGOING/COMPLETED) */}
+            <div className="w-full">
+              <div className="inline-flex items-center gap-1 rounded-lg border p-1">
+                {(["ALL", "PENDING", "ONGOING", "COMPLETED"] as RecentTab[]).map(
+                  (t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setRecentTab(t)}
+                      className={[
+                        "px-3 py-1.5 rounded-md text-sm transition",
+                        recentTab === t
+                          ? "bg-primary text-primary-foreground shadow"
+                          : "hover:bg-muted text-foreground/80",
+                      ].join(" ")}
+                    >
+                      {t === "ALL"
+                        ? "전체"
+                        : t === "PENDING"
+                        ? "대기"
+                        : t === "ONGOING"
+                        ? "진행"
+                        : "완료"}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
           </CardHeader>
+
           <CardContent className="p-6 space-y-2">
-            {data?.recentSubmissions?.length ? (
-              data.recentSubmissions.map((s) => (
+            {recentFiltered.length ? (
+              recentFiltered.map((s) => (
                 <div
                   key={s.assignmentId}
                   className="flex items-center justify-between border rounded-xl px-4 py-3 bg-card hover:bg-muted/30 transition"
@@ -442,7 +513,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                       {s.teamName ? ` • ${s.teamName}` : ""}
                     </div>
                   </div>
-                  <Badge variant="secondary">{s.status}</Badge>
+                  <Badge className={statusBadgeClass(s.status)}>{s.status}</Badge>
                 </div>
               ))
             ) : (
