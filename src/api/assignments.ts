@@ -88,3 +88,20 @@ export async function requestReview(
 ) {
   return changeAssignmentStatus(projectId, assignmentId, "PENDING");
 }
+
+/** 검토 이력 조회 */
+export type ReviewLog = {
+  id: number;
+  reviewerId?: number | null;
+  reviewerName?: string | null;
+  decision: "APPROVE" | "REJECT";
+  comment?: string | null;
+  createdAt: string | null; // ISO
+};
+
+export async function listAssignmentReviews(projectId: number, assignmentId: number) {
+  const { data } = await http.get<ReviewLog[]>(
+    `/projects/${projectId}/assignments/${assignmentId}/reviews`
+  );
+  return data;
+}

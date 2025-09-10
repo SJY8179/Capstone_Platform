@@ -1,5 +1,5 @@
 // src/pages/Dashboard/ProfessorDashboard.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -20,6 +20,8 @@ import {
   Plus,
   Loader2,
   RefreshCw,
+  History,
+  MessageSquare,
 } from "lucide-react";
 import { getProfessorSummary, type ProfessorSummary } from "@/api/dashboard";
 import { toast } from "sonner";
@@ -31,7 +33,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { bulkReview } from "@/api/professorReview";
+import {
+  bulkReview,
+  // 아래 2개는 "검토 메모/이력" 기능용 API입니다. (없으면 추가)
+  addReviewNote,
+  getReviewHistory,
+  type ReviewHistoryItem,
+  type ReviewAction,
+} from "@/api/professorReview";
 
 const TEXTS = {
   loading: "로딩중...",
@@ -60,6 +69,16 @@ const TEXTS = {
     "담당/참여 중인 프로젝트가 없습니다. 프로젝트를 생성하거나 팀에 초대를 요청하세요.",
   createProject: "프로젝트 생성",
   requestInvite: "초대 요청",
+  memoDialogApproveTitle: "승인 메모 (선택)",
+  memoDialogRejectTitle: "반려 사유 (필수)",
+  memoDialogDesc:
+    "해당 제출물에 대한 검토 의견을 남길 수 있습니다. 반려 시 사유 입력이 필요합니다.",
+  memoPlaceholder: "예: 형식 보완 후 재제출 바랍니다.",
+  memoCancel: "취소",
+  memoSubmit: "확인",
+  historyTitle: "검토 이력",
+  historyEmpty: "이력이 없습니다.",
+  historyLoadError: "이력을 불러오지 못했습니다.",
 };
 
 type ReviewStatus = "PENDING" | "ONGOING" | "COMPLETED";
@@ -99,6 +118,23 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [recentTab, setRecentTab] = useState<RecentTab>("ALL");
+
+  // 메모 입력 다이얼로그
+  const [memoOpen, setMemoOpen] = useState(false);
+  const [memoBusy, setMemoBusy] = useState(false);
+  const [memoAction, setMemoAction] = useState<ReviewAction>("APPROVE");
+  const [memoTarget, setMemoTarget] = useState<{
+    assignmentId: number;
+    projectId: number;
+    title?: string | null;
+  } | null>(null);
+  const [memoText, setMemoText] = useState("");
+
+  // 이력 다이얼로그
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyItems, setHistoryItems] = useState<ReviewHistoryItem[]>([]);
+  const [historyTitle, setHistoryTitle] = useState<string>("");
 
   /** 공통 로더 */
   const load = async () => {
@@ -163,11 +199,11 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     return { ...prev, recentSubmissions: recent ?? prev.recentSubmissions };
   }
 
-  /** ------- 액션 처리 ------- */
+  /** ------- 액션 처리 (핵심) ------- */
 
   // 단건 승인/반려: 낙관적 업데이트(즉시 제거/상태반영) + 서버 재조회로 일관성 보정
   const handleSingle = async (
-    action: "APPROVE" | "REJECT",
+    action: ReviewAction,
     assignmentId: number,
     projectIdForRow: number
   ) => {
@@ -190,14 +226,62 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     try {
       setBulkLoading(true);
       await bulkReview(action, [{ assignmentId, projectId: projectIdForRow }]);
-      toast.success(action === "APPROVE" ? "승인 완료" : "반려 처리");
-    } catch (e) {
-      console.error(e);
-      toast.error(action === "APPROVE" ? "승인 실패" : "반려 실패");
-      // 실패 시 서버가 진실원천 -> 재조회로 롤백/보정
     } finally {
       setBulkLoading(false);
-      await refreshSummary(); // 성공/실패 모두 최종 싱크
+      // 성공/실패 모두 최종 싱크
+      await refreshSummary();
+    }
+  };
+
+  // 메모 입력을 통한 확정 처리 (메모 저장 포함)
+  // 승인/반려 + 메모 전송
+  const submitDecisionWithMemo = async () => {
+    if (!memoTarget || !memoAction) return;
+
+    const comment = memoText.trim();
+    // 반려일 때는 코멘트 필수
+    if (memoAction === "REJECT" && !comment) {
+      toast.error("반려 사유를 입력하세요.");
+      return;
+    }
+
+    setMemoBusy(true);
+    try {
+      // 1) 일괄 검토 API로 코멘트 포함 전송
+      await bulkReview(memoAction, [
+        {
+          assignmentId: memoTarget.assignmentId,
+          projectId: memoTarget.projectId,
+          comment: comment || undefined, // 비어있으면 undefined
+        },
+      ]);
+
+      toast.success(memoAction === "APPROVE" ? "승인 완료" : "반려 처리");
+
+      // 2) 로컬 즉시 반영 (카운트/목록/최근 제출물 갱신 등)
+      setData((prev) => {
+        if (!prev) return prev;
+        const afterDec = decPendingCount(prev, 1) as ProfessorSummary;
+        const afterRemove = {
+          ...afterDec,
+          pendingReviews: afterDec.pendingReviews.filter(
+            (p) => p.assignmentId !== memoTarget.assignmentId
+          ),
+        } as ProfessorSummary;
+
+        const statusAfter: ReviewStatus =
+          memoAction === "APPROVE" ? "COMPLETED" : "ONGOING";
+        return patchRecentStatus(afterRemove, memoTarget.assignmentId, statusAfter);
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error(memoAction === "APPROVE" ? "승인 실패" : "반려 실패");
+    } finally {
+      setMemoBusy(false);
+      setMemoOpen(false);
+      setMemoText("");
+      // 서버 진실원천으로 싱크
+      await refreshSummary();
     }
   };
 
@@ -225,8 +309,6 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           const patchedRecent = patchRecentStatusesCompleted(afterMetrics, ids);
           return { ...patchedRecent, pendingReviews: [] };
         });
-      } else {
-        // 어떤 항목이 실패했는지 특정하기 어렵기 때문에 재조회로 맞춤
       }
 
       toast.success(`일괄 검토 완료 — 성공 ${successCount}건, 실패 ${failCount}건`);
@@ -236,6 +318,41 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     } finally {
       setBulkLoading(false);
       await refreshSummary(); // 항상 최종 싱크
+    }
+  };
+
+  /** ------- 메모/이력 UI 핸들러 ------- */
+
+  const openMemo = (
+    action: ReviewAction,
+    row: { assignmentId: number; projectId: number; title?: string | null }
+  ) => {
+    setMemoAction(action);
+    setMemoTarget({
+      assignmentId: row.assignmentId,
+      projectId: row.projectId,
+      title: row.title,
+    });
+    setMemoText("");
+    setMemoOpen(true);
+  };
+
+  const openHistory = async (row: {
+    assignmentId: number;
+    title?: string | null;
+  }) => {
+    setHistoryTitle(row.title || "제목 없음");
+    setHistoryItems([]);
+    setHistoryOpen(true);
+    try {
+      setHistoryBusy(true);
+      const items = await getReviewHistory(row.assignmentId);
+      setHistoryItems(items ?? []);
+    } catch (e) {
+      console.error(e);
+      toast.error(TEXTS.historyLoadError);
+    } finally {
+      setHistoryBusy(false);
     }
   };
 
@@ -252,6 +369,16 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     data?.recentSubmissions?.filter((s) =>
       recentTab === "ALL" ? true : s.status === recentTab
     ) ?? [];
+
+  // 이력 항목 색상/라벨
+  const historyActionLabel = (a?: string) =>
+    a === "APPROVE" ? "승인" : a === "REJECT" ? "반려" : a === "REQUEST" ? "검토요청" : "기타";
+  const historyActionClass = (a?: string) =>
+    a === "APPROVE"
+      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+      : a === "REJECT"
+        ? "bg-amber-100 text-amber-800 border border-amber-200"
+        : "bg-slate-100 text-slate-800 border border-slate-200";
 
   return (
     <div className="space-y-6">
@@ -431,9 +558,27 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      openHistory({
+                        assignmentId: item.assignmentId,
+                        title: item.title,
+                      })
+                    }
+                    title="검토 이력 보기"
+                  >
+                    <History className="h-4 w-4 mr-1" />
+                    이력
+                  </Button>
+                  <Button
+                    variant="outline"
                     disabled={bulkLoading || refreshing}
                     onClick={() =>
-                      handleSingle("REJECT", item.assignmentId, item.projectId)
+                      openMemo("REJECT", {
+                        assignmentId: item.assignmentId,
+                        projectId: item.projectId,
+                        title: item.title,
+                      })
                     }
                   >
                     반려
@@ -441,7 +586,11 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                   <Button
                     disabled={bulkLoading || refreshing}
                     onClick={() =>
-                      handleSingle("APPROVE", item.assignmentId, item.projectId)
+                      openMemo("APPROVE", {
+                        assignmentId: item.assignmentId,
+                        projectId: item.projectId,
+                        title: item.title,
+                      })
                     }
                   >
                     승인
@@ -488,10 +637,10 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                       {t === "ALL"
                         ? "전체"
                         : t === "PENDING"
-                        ? "대기"
-                        : t === "ONGOING"
-                        ? "진행"
-                        : "완료"}
+                          ? "대기"
+                          : t === "ONGOING"
+                            ? "진행"
+                            : "완료"}
                     </button>
                   )
                 )}
@@ -576,6 +725,114 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* 메모 입력 다이얼로그 */}
+      <Dialog open={memoOpen} onOpenChange={setMemoOpen}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>
+              {memoAction === "APPROVE"
+                ? TEXTS.memoDialogApproveTitle
+                : TEXTS.memoDialogRejectTitle}
+            </DialogTitle>
+            {/* Description은 항상 채워두세요 */}
+            <DialogDescription>
+              작성한 메모는 과제의 검토 이력에 저장되며 팀원/교수에게 공유됩니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">
+              대상: <span className="font-medium">{memoTarget?.title ?? "제목 없음"}</span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">메모</span>
+              </div>
+              <textarea
+                className="w-full min-h-[100px] rounded-md border bg-background p-2 text-sm"
+                placeholder={
+                  memoAction === "REJECT"
+                    ? "예: 형식 보완 후 재제출 바랍니다."
+                    : "예: 수고했어요! 요건 충족으로 승인합니다."
+                }
+                value={memoText}
+                onChange={(e) => setMemoText(e.target.value)}
+                disabled={memoBusy}
+              />
+              {memoAction === "REJECT" && !memoText.trim() && (
+                <p className="mt-1 text-xs text-amber-600">반려 사유를 입력해야 합니다.</p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMemoOpen(false)}
+              disabled={memoBusy}
+            >
+              {TEXTS.memoCancel}
+            </Button>
+            <Button
+              onClick={submitDecisionWithMemo}
+              disabled={memoBusy || (memoAction === "REJECT" && !memoText.trim())}
+            >
+              {memoBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {TEXTS.memoSubmit}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 이력 보기 다이얼로그 */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent aria-describedby={undefined} className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {TEXTS.historyTitle} <span className="font-normal">{historyTitle}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto space-y-3">
+            {historyBusy ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                불러오는 중…
+              </div>
+            ) : historyItems.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                {TEXTS.historyEmpty}
+              </div>
+            ) : (
+              historyItems.map((h) => (
+                <div
+                  key={`${h.id || ""}-${h.at || Math.random()}`}
+                  className="rounded-lg border p-3 bg-card"
+                >
+                  <div className="flex items-center justify-between">
+                    <Badge className={historyActionClass(h.action)}>{historyActionLabel(h.action)}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {fmtDateTime(h.at)}
+                    </span>
+                  </div>
+                  {h.actorName && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      담당자: <span className="font-medium text-foreground">{h.actorName}</span>
+                    </div>
+                  )}
+                  {h.note && (
+                    <div className="mt-2 text-sm whitespace-pre-wrap">
+                      {h.note}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
