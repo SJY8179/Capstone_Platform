@@ -16,6 +16,11 @@ public class Project extends BaseEntity {
     @JoinColumn(name = "team_id")
     private Team team;
 
+    /** 담당 교수 (1명). 팀 멤버가 아니어도 지정 가능 */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "professor_id")
+    private UserAccount professor;
+
     @Column(nullable = false, length = 100)
     private String title;
 
