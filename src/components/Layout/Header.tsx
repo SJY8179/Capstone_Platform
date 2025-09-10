@@ -19,7 +19,7 @@ interface AppUser {
   name: string;
   email: string;
   role: string;
-  avatar?: string | null;
+  avatarUrl?: string | null;
 }
 
 // --- 업데이트된 부분 시작 ---
@@ -81,7 +81,7 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <Avatar>
-                <AvatarImage src={user.avatar || undefined} alt={user.name} />
+                <AvatarImage src={user.avatarUrl || undefined} alt={user.name} />
                 <AvatarFallback>
                   <UserIcon className="h-4 w-4" />
                 </AvatarFallback>
