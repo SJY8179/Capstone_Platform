@@ -23,13 +23,17 @@ import {
 
 interface HorizontalCalendarProps {
   className?: string;
-  /** 프로젝트 없으면 API 호출은 스킵하지만, 캘린더 그리드는 항상 렌더 */
   projectId?: number;
 }
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const toYMD = (d: Date) => d.toISOString().split("T")[0];
+/** 로컬 시간 기준 YYYY-MM-DD */
+const toYMD = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const monthLabel = (d: Date) => `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
 const weekLabel = (start: Date) => {
   const end = new Date(start);
@@ -57,7 +61,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
   const [events, setEvents] = useState<UiEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 새 일정 모달 상태
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorInitial, setEditorInitial] = useState<{
     id?: number;
@@ -69,12 +72,10 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     location?: string;
   } | undefined>(undefined);
 
-  // 프로젝트 필요 안내
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
   const today = new Date();
 
-  // 주 시작(일요일)
   const getStartOfWeek = (date: Date, weekOffset = 0) => {
     const start = new Date(date);
     const day = start.getDay();
@@ -83,7 +84,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     return start;
   };
 
-  // 월 시작(1일)
   const getStartOfMonth = (date: Date, monthOffset = 0) => {
     const start = new Date(date.getFullYear(), date.getMonth() + monthOffset, 1);
     start.setHours(0, 0, 0, 0);
@@ -132,7 +132,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     : getStartOfWeek(today, currentOffset);
   const unitLabel = isExpanded ? "달" : "주";
 
-  /** 조회 범위 계산 */
   const fetchRange = useMemo(() => {
     if (isExpanded) {
       const start = getStartOfMonth(today, currentOffset);
@@ -146,7 +145,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     }
   }, [isExpanded, today, currentOffset]);
 
-  /** API → UI 모델 변환 */
   const mapToUi = (data: ScheduleDto[]): UiEvent[] =>
     (data ?? []).map((s) => ({
       id: String(s.id),
@@ -158,9 +156,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
       description: s.description ?? undefined,
     }));
 
-  /** 데이터 로딩 */
   const reload = async () => {
-    // ✅ projectId가 없어도 캘린더 그리드는 렌더하므로, 이벤트만 빈 배열 유지
     if (!projectId) {
       setEvents([]);
       return;
@@ -183,8 +179,41 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchRange.from, fetchRange.to, projectId]);
 
+  /* 외부 변경 -> 즉시 리로드 */
+  useEffect(() => {
+    const handler = async () => {
+      if (!projectId) return;
+      try { invalidateSchedulesCache(projectId); } catch {}
+      await reload();
+    };
+
+    let off: (() => void) | undefined;
+
+    try {
+      // onChanged(handler)
+      // @ts-ignore
+      off = scheduleBus.onChanged?.(handler);
+    } catch {}
+
+    try {
+      // on("changed", handler)
+      if (!off && typeof (scheduleBus as any).on === "function") {
+        // @ts-ignore
+        scheduleBus.on("changed", handler);
+        off = () => {
+          try {
+            // @ts-ignore
+            scheduleBus.off?.("changed", handler);
+          } catch {}
+        };
+      }
+    } catch {}
+
+    return () => { try { off?.(); } catch {} };
+  }, [projectId, fetchRange.from, fetchRange.to]);
+
   const getEventsForDate = (date: Date) => {
-    const ymd = toYMD(date);
+    const ymd = toYMD(date); // 로컬 기준
     return events.filter((e) => e.date === ymd);
   };
 
@@ -251,7 +280,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
     return date.getMonth() === ref.getMonth() && date.getFullYear() === ref.getFullYear();
   };
 
-  /** 일정 추가 버튼 → 모달/안내 */
   const onClickAdd = () => {
     if (!projectId) {
       setNeedProjectOpen(true);
@@ -318,7 +346,6 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         </CardHeader>
 
         <CardContent>
-          {/* ✅ projectId 없어도 캘린더 그리드 렌더 */}
           <>
             {/* 요일 헤더 */}
             <div className="grid grid-cols-7 gap-1 mb-4">
@@ -495,7 +522,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         </Card>
       )}
 
-      {/* 새 일정 모달: 프로젝트가 있을 때만 표시 */}
+      {/* 새 일정 모달 */}
       {projectId && (
         <EventEditor
           open={editorOpen}
@@ -506,12 +533,13 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
             setEditorOpen(false);
             invalidateSchedulesCache(projectId);
             await reload();
-            scheduleBus.emitChanged();
+            scheduleBus.emitChanged?.();
+            // @ts-ignore
+            scheduleBus.emit?.("changed");
           }}
         />
       )}
 
-      {/* 프로젝트 필요 안내 다이얼로그 */}
       {!projectId && (
         <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
           <DialogContent>

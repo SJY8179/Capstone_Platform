@@ -29,7 +29,11 @@ import {
 } from "@/components/ui/dialog";
 
 /* ===== util ===== */
-const toYMD = (d: Date) => d.toISOString().split("T")[0];
+/** 로컬 시간 기준 YYYY-MM-DD */
+const toYMD = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 const addDays = (d: Date, n: number) => {
   const c = new Date(d);
   c.setDate(c.getDate() + n);
@@ -137,6 +141,39 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         setLoading(false);
       }
     })();
+  }, [projectId, refreshSchedules]);
+
+  /* 다른 컴포넌트에서 일정이 변경되면 대시보드도 즉시 갱신 */
+  useEffect(() => {
+    const handler = async () => {
+      if (!projectId) return;
+      try { invalidateSchedulesCache(projectId); } catch {}
+      await refreshSchedules();
+    };
+
+    let off: (() => void) | undefined;
+
+    try {
+      // onChanged(handler) 형태 지원
+      // @ts-ignore
+      off = scheduleBus.onChanged?.(handler);
+    } catch {}
+
+    try {
+      // on("changed", handler) 형태 지원
+      if (!off && typeof (scheduleBus as any).on === "function") {
+        // @ts-ignore
+        scheduleBus.on("changed", handler);
+        off = () => {
+          try {
+            // @ts-ignore
+            scheduleBus.off?.("changed", handler);
+          } catch {}
+        };
+      }
+    } catch {}
+
+    return () => { try { off?.(); } catch {} };
   }, [projectId, refreshSchedules]);
 
   /* 카드 상단 요약 값 */
@@ -357,7 +394,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         </Card>
       </div>
 
-      {/* 월간 캘린더 위젯 - projectId 없으면 내부에서 플레이스홀더 */}
+      {/* 월간 캘린더 위젯 */}
       <CalendarWidget projectId={projectId} />
 
       {/* 최근 피드백 */}
@@ -406,7 +443,9 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
             setEditorOpen(false);
             invalidateSchedulesCache(projectId);
             await refreshSchedules();
-            scheduleBus.emitChanged();
+            scheduleBus.emitChanged?.();
+            // @ts-ignore
+            scheduleBus.emit?.("changed");
           }}
         />
       )}
