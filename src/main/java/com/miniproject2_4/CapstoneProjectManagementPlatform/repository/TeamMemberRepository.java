@@ -14,6 +14,9 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemb
     /** 팀 인원 수 */
     long countByTeam_Id(Long teamId);
 
+    /** 권한검사용: 팀에 해당 사용자가 포함되는지 */
+    boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
+
     /**
      * 팀 구성원 + 사용자 정보까지 함께 로드
      * - TeamService/ProjectService에서 사용

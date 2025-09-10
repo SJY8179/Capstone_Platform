@@ -98,6 +98,10 @@ public class DashboardService {
     }
 
     /* ========= 교수 대시보드 요약 ========= */
+    /**
+     * “검토 대기”는 **PENDING만** 포함.
+     * - 반려 시 ONGOING 으로 바꾸면 목록에 재등장하지 않음.
+     */
     public ProfessorSummaryDto getProfessorSummary(Long professorUserId) {
         // 담당/참여 교수 기준: 팀 멤버십으로 연계
         List<Project> myProjects = projectRepository.findAllByProfessorUserId(professorUserId);
@@ -128,10 +132,9 @@ public class DashboardService {
         int studentCount = teamIds.isEmpty() ? 0 :
                 (int) teamMemberRepository.countDistinctMembersByTeamIdsAndUserRole(teamIds, Role.STUDENT);
 
-        // “검토 대기”: PENDING 이거나, ONGOING & 마감 D<=7(또는 경과)
-        var now = LocalDateTime.now();
+        // 검토 대기: PENDING만
         int pendingReviews = (int) allAssignments.stream()
-                .filter(a -> isPendingForReview(a, now))
+                .filter(a -> a.getStatus() == AssignmentStatus.PENDING)
                 .count();
 
         // 평균 진행률
@@ -143,10 +146,11 @@ public class DashboardService {
         }).average().orElse(0.0);
         avgProgress = Math.round(avgProgress * 10.0) / 10.0;
 
-        // 검토 대기 목록
         ZoneId zone = ZoneId.systemDefault();
+
+        // 검토 대기 목록 — PENDING만, 마감 임박순
         List<ProfessorSummaryDto.PendingReviewItem> pending = allAssignments.stream()
-                .filter(a -> isPendingForReview(a, now))
+                .filter(a -> a.getStatus() == AssignmentStatus.PENDING)
                 .sorted(Comparator.comparing(
                         a -> Optional.ofNullable(a.getDueDate()).orElse(LocalDateTime.MAX)
                 ))
@@ -161,12 +165,11 @@ public class DashboardService {
                 ))
                 .toList();
 
-        // 최근 제출물
+        // 최근 제출물 — 최신 10건
         List<ProfessorSummaryDto.RecentSubmission> recent = allAssignments.stream()
                 .sorted(Comparator.comparing((Assignment a) ->
-                        Optional.ofNullable(a.getUpdatedAt()).orElse(
-                                a.getDueDate() != null ? a.getDueDate() : LocalDateTime.MIN
-                        )
+                        Optional.ofNullable(a.getUpdatedAt())
+                                .orElse(a.getDueDate() != null ? a.getDueDate() : LocalDateTime.MIN)
                 ).reversed())
                 .limit(10)
                 .map(a -> new ProfessorSummaryDto.RecentSubmission(
@@ -206,17 +209,6 @@ public class DashboardService {
                 new ProfessorSummaryDto.Metrics(runningTeams, pendingReviews, courses, avgProgress, studentCount),
                 pending, recent, top
         );
-    }
-
-    /** 검토대기 판단 로직을 별도 메서드로 분리 (지역 함수 금지 보완) */
-    private static boolean isPendingForReview(Assignment a, LocalDateTime now) {
-        if (a == null) return false;
-        if (a.getStatus() == AssignmentStatus.PENDING) return true;
-        if (a.getStatus() == AssignmentStatus.ONGOING && a.getDueDate() != null) {
-            LocalDateTime within7d = now.plusDays(7);
-            return !a.getDueDate().isAfter(within7d); // 기한이 지났거나 7일 이내
-        }
-        return false;
     }
 
     private static OffsetDateTime toOffset(LocalDateTime ts, ZoneId zone) {
