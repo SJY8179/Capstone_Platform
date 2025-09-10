@@ -24,7 +24,7 @@ public class ProfessorReviewService {
 
     private static final DateTimeFormatter ISO_OFS = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
-    /** 목록 조회 */
+    /** 목록 조회: 검토 대기(PENDING)만 노출 */
     @Transactional(readOnly = true)
     public List<ProfessorReviewDto.ReviewItem> listPendingReviews(Long userId, int days, int limit) {
         // 교수/참여자 기준 프로젝트
@@ -34,13 +34,11 @@ public class ProfessorReviewService {
         List<Long> projectIds = myProjects.stream().map(Project::getId).toList();
         List<Assignment> all = assignmentRepository.findByProject_IdIn(projectIds);
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime within = now.plusDays(Math.max(0, days));
         ZoneId zone = ZoneId.systemDefault();
 
-        // Pending 대상 판정
+        // ✅ PENDING만 노출 (임박/지남 ONGOING은 목록에서 제외)
         List<Assignment> targets = all.stream()
-                .filter(a -> isPendingForReview(a, within))
+                .filter(a -> a.getStatus() == AssignmentStatus.PENDING)
                 .sorted(Comparator.comparing(
                         a -> Optional.ofNullable(a.getDueDate()).orElse(LocalDateTime.MAX)
                 ))
@@ -61,7 +59,7 @@ public class ProfessorReviewService {
                 .collect(Collectors.toList());
     }
 
-    /** 일괄 처리 */
+    /** 일괄 처리 (APPROVE → COMPLETED, REJECT → ONGOING) */
     @Transactional
     public ProfessorReviewDto.BulkResult bulkReview(Long userId, ProfessorReviewDto.BulkRequest req) {
         ProfessorReviewDto.Action action = req.action();
@@ -99,11 +97,11 @@ public class ProfessorReviewService {
                 // 상태 변경
                 if (action == ProfessorReviewDto.Action.APPROVE) {
                     a.setStatus(AssignmentStatus.COMPLETED);
-                } else { // REJECT
-                    a.setStatus(AssignmentStatus.PENDING);
+                } else { // REJECT -> 목록에서 빠지도록 ONGOING
+                    a.setStatus(AssignmentStatus.ONGOING);
                 }
 
-                // 변경은 영속 컨텍스트에 의해 flush됨 (save 호출 불필요)
+                // 변경은 영속 컨텍스트에 의해 flush됨
                 ok++;
             } catch (Exception ex) {
                 failed.add(it.assignmentId());
@@ -113,6 +111,7 @@ public class ProfessorReviewService {
         return new ProfessorReviewDto.BulkResult(ok, failed.size(), failed);
     }
 
+    @SuppressWarnings("unused")
     private static boolean isPendingForReview(Assignment a, LocalDateTime within) {
         if (a == null || a.getStatus() == null) return false;
         if (a.getStatus() == AssignmentStatus.PENDING) return true;

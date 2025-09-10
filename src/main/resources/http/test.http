@@ -38,7 +38,7 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "title": "test-3days",
+  "title": "A-3days",
   "dueDateIso": "{{D_PLUS3}}",
   "status": "PENDING"
 }
@@ -49,7 +49,7 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "title": "ttest-overdue",
+  "title": "A 테스트-overdue",
   "dueDateIso": "{{D_MINUS1}}",
   "status": "ONGOING"
 }
