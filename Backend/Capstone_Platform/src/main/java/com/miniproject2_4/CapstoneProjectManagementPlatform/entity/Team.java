@@ -13,4 +13,7 @@ public class Team extends BaseEntity {
 
     @Column(name = "name", length = 80, nullable = false)
     private String name;
+
+    @Column(name = "description", length = 200)
+    private String description;
 }

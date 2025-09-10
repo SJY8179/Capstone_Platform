@@ -5,6 +5,7 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Assignment;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.AssignmentStatus;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.AssignmentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,9 +17,12 @@ public class AssignmentController {
 
     private final AssignmentService assignmentService;
 
-    // 요청 바디를 위한 간단한 레코드
+    // 요청 바디
     public record CreateReq(String title, String dueDateIso, AssignmentStatus status) {}
     public record UpdateReq(String title, String dueDateIso, AssignmentStatus status) {}
+
+    /** 일괄 상태 변경 요청 바디 */
+    public record BulkReq(List<Long> assignmentIds, AssignmentStatus status) {}
 
     // GET /api/projects/{projectId}/assignments
     @GetMapping
@@ -57,5 +61,23 @@ public class AssignmentController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long projectId, @PathVariable Long id) {
         assignmentService.delete(projectId, id);
+    }
+
+    /** POST /api/projects/{projectId}/assignments/status-bulk
+     * 같은 프로젝트에 속한 과제들에 한해 일괄 상태 변경.
+     * 잘못된 ID(다른 프로젝트 소속)는 조용히 무시합니다.
+     */
+    @PostMapping("/status-bulk")
+    @Transactional
+    public void bulkChange(@PathVariable Long projectId, @RequestBody BulkReq req) {
+        if (req.assignmentIds() == null || req.assignmentIds().isEmpty()) return;
+        AssignmentStatus target = req.status() != null ? req.status() : AssignmentStatus.COMPLETED;
+        for (Long id : req.assignmentIds()) {
+            try {
+                assignmentService.changeStatus(projectId, id, target);
+            } catch (IllegalArgumentException ignore) {
+                // 다른 프로젝트 소속/없는 ID 등은 무시
+            }
+        }
     }
 }
