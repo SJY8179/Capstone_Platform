@@ -1,5 +1,5 @@
 // src/pages/Dashboard/ProfessorDashboard.tsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -21,7 +21,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { getProfessorSummary, type ProfessorSummary } from "@/api/dashboard";
-import { changeAssignmentStatus } from "@/api/assignments";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -31,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { bulkReview } from "@/api/professorReview";
 
 const TEXTS = {
   loading: "로딩중...",
@@ -79,13 +79,19 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  /** 공통 로더 */
+  const load = async () => {
+    const res = await getProfessorSummary();
+    setData(res);
+  };
 
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const res = await getProfessorSummary();
-        setData(res);
+        await load();
       } catch (e) {
         console.error(e);
       } finally {
@@ -94,69 +100,138 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     })();
   }, []);
 
-  const approve = async (assignmentId: number, projectIdForRow: number) => {
+  const refreshSummary = async () => {
     try {
-      await changeAssignmentStatus(projectIdForRow, assignmentId, "COMPLETED");
-      toast.success("승인 완료");
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              pendingReviews: prev.pendingReviews.filter(
-                (p) => p.assignmentId !== assignmentId
-              ),
-            }
-          : prev
-      );
-    } catch {
-      toast.error("승인 실패");
+      setRefreshing(true);
+      await load();
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  const reject = async (assignmentId: number, projectIdForRow: number) => {
+  /** ------- 로컬 즉시 반영 유틸 ------- */
+
+  // pendingReviews 카운트를 안전하게 감소
+  function decPendingCount(prev: ProfessorSummary | null, dec: number) {
+    if (!prev?.metrics) return prev;
+    const cur = Number(prev.metrics.pendingReviews ?? 0);
+    const next = Math.max(0, cur - dec);
+    // @ts-ignore(백엔드 DTO 구조 그대로 사용)
+    return { ...prev, metrics: { ...prev.metrics, pendingReviews: next } };
+  }
+
+  // 최근 제출물의 단일 아이템 상태 패치
+  function patchRecentStatus(
+    prev: ProfessorSummary,
+    assignmentId: number,
+    status: "COMPLETED" | "ONGOING" | "PENDING"
+  ): ProfessorSummary {
+    const recent = prev.recentSubmissions?.map((s) =>
+      s.assignmentId === assignmentId ? { ...s, status } : s
+    );
+    return { ...prev, recentSubmissions: recent ?? prev.recentSubmissions };
+  }
+
+  // 여러 아이템을 COMPLETED로 패치
+  function patchRecentStatusesCompleted(
+    prev: ProfessorSummary,
+    ids: number[]
+  ): ProfessorSummary {
+    const idSet = new Set(ids);
+    const recent = prev.recentSubmissions?.map((s) =>
+      idSet.has(s.assignmentId) ? { ...s, status: "COMPLETED" } : s
+    );
+    return { ...prev, recentSubmissions: recent ?? prev.recentSubmissions };
+  }
+
+  /** ------- 액션 처리 ------- */
+
+  // 단건 승인/반려: 성공 시 로컬 즉시 반영, 실패/부분 성공 대비로 필요 시 재조회
+  const handleSingle = async (
+    action: "APPROVE" | "REJECT",
+    assignmentId: number,
+    projectIdForRow: number
+  ) => {
     try {
-      await changeAssignmentStatus(projectIdForRow, assignmentId, "PENDING");
-      toast.success("반려 처리");
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              pendingReviews: prev.pendingReviews.filter(
-                (p) => p.assignmentId !== assignmentId
-              ),
-            }
-          : prev
-      );
-    } catch {
-      toast.error("반려 실패");
+      setBulkLoading(true);
+      const { successCount } = await bulkReview(action, [
+        { assignmentId, projectId: projectIdForRow },
+      ]);
+
+      if (successCount === 1) {
+        setData((prev) => {
+          if (!prev) return prev;
+
+          // 승인: 대기 카운트 1 감소 + 대기 목록에서 제거
+          // 반려: 대기 목록/카운트 유지(PENDING이므로 계속 남음)
+          const afterMetrics =
+            action === "APPROVE" ? decPendingCount(prev, 1)! : prev;
+
+          const afterPending =
+            action === "APPROVE"
+              ? afterMetrics.pendingReviews?.filter(
+                  (p) => p.assignmentId !== assignmentId
+                )
+              : afterMetrics.pendingReviews;
+
+          const statusAfter = action === "APPROVE" ? "COMPLETED" : "PENDING";
+          const patchedRecent = patchRecentStatus(
+            { ...afterMetrics, pendingReviews: afterPending ?? [] } as ProfessorSummary,
+            assignmentId,
+            statusAfter
+          );
+          return patchedRecent;
+        });
+      } else {
+        // 이례적으로 실패/부분 성공이면 서버가 진실원천 → 재조회
+        await refreshSummary();
+      }
+
+      toast.success(action === "APPROVE" ? "승인 완료" : "반려 처리");
+    } catch (e) {
+      console.error(e);
+      toast.error(action === "APPROVE" ? "승인 실패" : "반려 실패");
+    } finally {
+      setBulkLoading(false);
     }
   };
 
+  // 일괄 승인: 전부 성공이면 로컬 즉시 반영, 부분 성공이면 안전하게 재조회
   const onBulkApprove = async () => {
     const items = data?.pendingReviews ?? [];
     if (!items.length) return;
-
     if (!window.confirm(`검토 대기 ${items.length}건을 모두 승인할까요?`)) return;
 
-    setBulkLoading(true);
-    let ok = 0;
-    let fail = 0;
-    for (const it of items) {
-      try {
-        await changeAssignmentStatus(it.projectId, it.assignmentId, "COMPLETED");
-        ok++;
-      } catch {
-        fail++;
-      }
-    }
-    setBulkLoading(false);
+    const payload = items.map((it) => ({
+      assignmentId: it.assignmentId,
+      projectId: it.projectId,
+    }));
 
-    if (ok) {
-      setData((prev) =>
-        prev ? { ...prev, pendingReviews: [] } : prev
-      );
+    try {
+      setBulkLoading(true);
+      const { successCount, failCount } = await bulkReview("APPROVE", payload);
+
+      if (successCount === items.length) {
+        const ids = payload.map((p) => p.assignmentId);
+        setData((prev) => {
+          if (!prev) return prev;
+          const afterMetrics = decPendingCount(prev, successCount)!;
+          const afterPending: ProfessorSummary["pendingReviews"] = [];
+          const patchedRecent = patchRecentStatusesCompleted(afterMetrics, ids);
+          return { ...patchedRecent, pendingReviews: afterPending ?? [] };
+        });
+      } else {
+        // 어떤 항목이 실패했는지 응답으로 알 수 없으므로 재조회
+        await refreshSummary();
+      }
+
+      toast.success(`일괄 검토 완료 — 성공 ${successCount}건, 실패 ${failCount}건`);
+    } catch (e) {
+      console.error(e);
+      toast.error("일괄 검토 실패");
+    } finally {
+      setBulkLoading(false);
     }
-    toast.success(`일괄 검토 완료 — 성공 ${ok}건, 실패 ${fail}건`);
   };
 
   if (loading) return <div>{TEXTS.loading}</div>;
@@ -170,8 +245,13 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-2">
           <h2 className="text-2xl font-semibold">{TEXTS.headerTitle}</h2>
+          {refreshing && (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
+        <div>
           <p className="text-muted-foreground">{TEXTS.headerDescription}</p>
         </div>
         <Button
@@ -187,18 +267,24 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
       {noProject && (
         <Card>
           <CardContent className="p-6 flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{TEXTS.noProjectCallout}</p>
+            <p className="text-sm text-muted-foreground">
+              {TEXTS.noProjectCallout}
+            </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
-                onClick={() => toast.info("프로젝트 생성은 추후 연결 예정입니다.")}
+                onClick={() =>
+                  toast.info("프로젝트 생성은 추후 연결 예정입니다.")
+                }
               >
                 {TEXTS.createProject}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => toast.info("초대 요청은 추후 연결 예정입니다.")}
+                onClick={() =>
+                  toast.info("초대 요청은 추후 연결 예정입니다.")
+                }
               >
                 {TEXTS.requestInvite}
               </Button>
@@ -209,7 +295,6 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
 
       {/* 메트릭 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* 진행 팀 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -226,7 +311,6 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 검토 대기 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -245,7 +329,6 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 수강 학생 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -256,15 +339,12 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                 <p className="text-2xl font-semibold">
                   {metrics?.studentCount ?? 0}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  {TEXTS.students}
-                </p>
+                <p className="text-sm text-muted-foreground">{TEXTS.students}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* 평균 진도 */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -319,18 +399,26 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                   <div className="text-sm text-muted-foreground">
                     {item.projectName ?? "프로젝트"}
                     {item.teamName ? ` • ${item.teamName}` : ""}{" "}
-                    {item.submittedAt ? `• ${fmtDateTime(item.submittedAt)}` : ""}
+                    {item.submittedAt
+                      ? `• ${fmtDateTime(item.submittedAt)}`
+                      : ""}
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => reject(item.assignmentId, item.projectId)}
+                    disabled={bulkLoading}
+                    onClick={() =>
+                      handleSingle("REJECT", item.assignmentId, item.projectId)
+                    }
                   >
                     반려
                   </Button>
                   <Button
-                    onClick={() => approve(item.assignmentId, item.projectId)}
+                    disabled={bulkLoading}
+                    onClick={() =>
+                      handleSingle("APPROVE", item.assignmentId, item.projectId)
+                    }
                   >
                     승인
                   </Button>
@@ -422,7 +510,10 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
               <DialogDescription>{TEXTS.needProjectDesc}</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setNeedProjectOpen(false)}
+              >
                 {TEXTS.confirm}
               </Button>
             </DialogFooter>
