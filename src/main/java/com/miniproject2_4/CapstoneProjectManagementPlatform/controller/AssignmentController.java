@@ -1,6 +1,7 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.AssignmentDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.RequestReviewDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Assignment;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.AssignmentStatus;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.AssignmentService;
@@ -79,5 +80,21 @@ public class AssignmentController {
                 // 다른 프로젝트 소속/없는 ID 등은 무시
             }
         }
+    }
+
+    /** PATCH /api/projects/{projectId}/assignments/{id}/request-review
+     * 학생(팀 구성원)이 검토 요청: ONGOING -> PENDING
+     * - userId 취득 방식은 프로젝트 환경에 따라 다를 수 있어,
+     *   우선 선택 헤더(X-USER-ID)를 지원하고(null이면 권한검사 생략).
+     *   보안 강화를 원하면 SecurityContext로 대체하세요.
+     */
+    @PatchMapping("/{id}/request-review")
+    public AssignmentDto requestReview(@PathVariable Long projectId,
+                                       @PathVariable Long id,
+                                       @RequestBody(required = false) RequestReviewDto body,
+                                       @RequestHeader(name = "X-USER-ID", required = false) Long userIdOptional) {
+        Assignment a = assignmentService.requestReview(projectId, id, userIdOptional,
+                body != null ? body.message() : null);
+        return AssignmentDto.of(a);
     }
 }
