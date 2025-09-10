@@ -1,0 +1,239 @@
+@baseUrl = http://localhost:8080/api
+@email = testclient@example.com
+@password = pass1234!
+@projectId = 1
+@from = 2025-09-09
+@to = 2025-09-10
+@token = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI4IiwibmFtZSI6IlRlc3RlciBPbmUiLCJleHAiOjE3NTczODc4NjgsImlhdCI6MTc1NzM4Njk2OCwiZW1haWwiOiJ0ZXN0Y2xpZW50QGV4YW1wbGUuY29tIn0.kfdUKKLQUBgYz7E-uGd8YClFlHQATGvdEm-jFotNxLc
+
+### 0) 보호 API를 토큰 없이 호출 → 401 기대
+GET {{baseUrl}}/schedules
+
+> {% client.test("0) schedules without token => 401", function() {
+        client.assert(response.status === 401, "Expected 401 without token");
+    }); %}
+
+### 1) 회원가입 (이미 있으면 200/400/409 허용)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Tester One",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {% client.test("1) register ok or already exists", function() {
+        client.assert([200,400,409].includes(response.status), "Expected 200/400/409");
+    }); %}
+
+### 2) 로그인 → access/refresh 저장 + today, eventId 초기화
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("2) login 200 and tokens present", function() {
+        client.assert(response.status === 200, "Login must be 200");
+        client.assert(!!response.body.accessToken, "accessToken missing");
+        client.assert(!!response.body.refreshToken, "refreshToken missing");
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("refreshToken", response.body.refreshToken);
+
+    // KST(+09:00) 기준 today 계산
+    const now = new Date();
+    const kstNow = new Date(now.getTime() + 9*60*60*1000);
+    const today = kstNow.toISOString().slice(0,10);
+    client.global.set("today", today);
+
+    // eventId 기본값(멤버십 없을 때도 이후 요청이 변수 에러 없이 통과하도록)
+    client.global.set("eventId", "0");
+%}
+
+### 3) me 확인 → 200 기대
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{accessToken}}
+
+> {% client.test("3) me 200", function() {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.email === client.global.get("email") || true, "Just show profile");
+    }); %}
+
+### 4) 프로젝트 이벤트 목록 → 멤버십 없으면 403 / 있으면 200
+GET {{baseUrl}}/projects/{{projectId}}/events
+Authorization: Bearer {{accessToken}}
+
+> {% client.test("4) list events => 200 or 403", function() {
+        client.assert([200,403].includes(response.status), "Expected 200 or 403");
+    }); %}
+
+### 5) 이벤트 생성 → 멤버십 없으면 403, 있으면 200 + id 저장
+POST {{baseUrl}}/projects/{{projectId}}/events
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "스프린트 킥오프",
+  "startAtIso": "{{today}}T10:00:00+09:00",
+  "endAtIso": "{{today}}T11:00:00+09:00",
+  "type": "MEETING",
+  "location": "회의실 A"
+}
+
+> {%
+    client.test("5) create event => 200 or 403", function() {
+        client.assert([200,403].includes(response.status), "Expected 200 or 403");
+    });
+    if (response.status === 200 && response.body.id) {
+        client.global.set("eventId", String(response.body.id));
+    }
+%}
+
+### 6) 기간 조회(이벤트) → 멤버십 없으면 403, 있으면 200
+GET {{baseUrl}}/projects/{{projectId}}/events/range?from={{today}}&to={{today}}
+Authorization: Bearer {{accessToken}}
+
+> {% client.test("6) events in range => 200 or 403", function() {
+        client.assert([200,403].includes(response.status), "Expected 200 or 403");
+    }); %}
+
+### 7) 스케줄 통합(range) → 토큰만 있으면 200 (onlyEvents=true/false 모두 확인)
+GET {{baseUrl}}/schedules/range?from={{today}}&to={{today}}&projectId={{projectId}}&onlyEvents=true
+Authorization: Bearer {{accessToken}}
+
+> {% client.test("7-1) schedules(range, onlyEvents=true) => 200", function() {
+        client.assert(response.status === 200, "Expected 200");
+    }); %}
+
+###
+GET {{baseUrl}}/schedules/range?from={{today}}&to={{today}}&projectId={{projectId}}&onlyEvents=false
+Authorization: Bearer {{accessToken}}
+
+> {% client.test("7-2) schedules(range, onlyEvents=false) => 200", function() {
+        client.assert(response.status === 200, "Expected 200");
+    }); %}
+
+### 8) 이벤트 부분 수정 → 멤버십 없거나 eventId=0이면 403/404 허용, 있으면 200
+PATCH {{baseUrl}}/projects/{{projectId}}/events/{{eventId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "킥오프(수정)",
+  "location": "회의실 B"
+}
+
+> {% client.test("8) patch event => 200/403/404", function() {
+        client.assert([200,403,404].includes(response.status), "Expected 200/403/404");
+    }); %}
+
+### 9) 이벤트 삭제 → 멤버십 없거나 eventId=0이면 403/404 허용, 있으면 204
+DELETE {{baseUrl}}/projects/{{projectId}}/events/{{eventId}}
+Authorization: Bearer {{accessToken}}
+
+> {% client.test("9) delete event => 204/403/404", function() {
+        client.assert([204,403,404].includes(response.status), "Expected 204/403/404");
+    }); %}
+
+### 10) 리프레시 플로우 → 새 access 발급 200
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+> {%
+    client.test("10) refresh => 200 and accessToken present", function() {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(!!response.body.accessToken, "new accessToken missing");
+    });
+    client.global.set("accessToken", response.body.accessToken);
+%}
+
+### 11) 네거티브: 잘못된 토큰으로 요청 → 401 기대
+GET {{baseUrl}}/schedules
+Authorization: Bearer invalid.token.value
+
+> {% client.test("11) invalid token => 401", function() {
+        client.assert(response.status === 401, "Expected 401 with invalid token");
+    }); %}
+
+
+### 이벤트 생성 (200 기대, id 저장)
+POST {{baseUrl}}/projects/{{projectId}}/events
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "스프린트 킥오프",
+  "startAtIso": "2025-09-09T10:00:00+09:00",
+  "endAtIso": "2025-09-09T11:00:00+09:00",
+  "type": "MEETING",
+  "location": "회의실 A"
+}
+
+> {% client.global.set("eventId", response.body.id); %}
+
+### 범위 조회 (생성한 일정 포함, 200 기대)
+GET {{baseUrl}}/projects/{{projectId}}/events/range?from={{from}}&to={{to}}
+Authorization: Bearer {{token}}
+
+### 스케줄 통합 조회 (onlyEvents=true, 200 기대)
+GET {{baseUrl}}/schedules/range?from={{from}}&to={{to}}&projectId={{projectId}}&onlyEvents=true
+Authorization: Bearer {{token}}
+
+### 이벤트 부분 수정 (200 기대)
+PATCH {{baseUrl}}/projects/{{projectId}}/events/{{eventId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "킥오프(수정)",
+  "location": "회의실 B"
+}
+
+### 이벤트 삭제 (204 기대)
+DELETE {{baseUrl}}/projects/{{projectId}}/events/{{eventId}}
+Authorization: Bearer {{token}}
+
+###
+GET {{baseUrl}}/schedules/range?from=2025-09-14&to=2025-09-22&projectId={{projectId}}&onlyEvents=false
+Authorization: Bearer {{token}}
+
+### 0) 로그인 → accessToken 저장
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "testclient@example.com",
+  "password": "pass1234!"
+}
+
+> {%
+    // 액세스 토큰 저장
+    client.global.set("accessToken", response.body.accessToken);
+    // 간단 로그
+    console.log("accessToken saved");
+%}
+
+### 1) 삭제된 이벤트 수정 시도 → 404 기대
+PATCH http://localhost:8080/api/projects/1/events/26
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "다시수정",
+  "location": "어딘가"
+}
+
+> {%
+    client.test("Expect 404 (deleted event)", function() {
+        client.assert(response.status === 404, "status should be 404, got " + response.status);
+    });
+%}

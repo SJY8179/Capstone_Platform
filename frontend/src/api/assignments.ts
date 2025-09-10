@@ -43,7 +43,7 @@ export async function updateAssignment(
   return data;
 }
 
-/** 상태 변경 */
+/** 상태 변경 (단건) */
 export async function changeAssignmentStatus(
   projectId: number,
   assignmentId: number,
@@ -55,6 +55,14 @@ export async function changeAssignmentStatus(
     { params: { value } }
   );
   return data;
+}
+
+/** 상태 변경 (일괄) */
+export async function bulkChangeAssignments(
+  projectId: number,
+  payload: { assignmentIds: number[]; status: "COMPLETED" | "ONGOING" | "PENDING" }
+) {
+  await http.post(`/projects/${projectId}/assignments/status-bulk`, payload);
 }
 
 /** 삭제 */

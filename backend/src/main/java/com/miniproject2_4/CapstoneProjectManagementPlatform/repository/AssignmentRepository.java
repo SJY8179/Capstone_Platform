@@ -23,4 +23,7 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
             List<AssignmentStatus> statuses,
             LocalDateTime now
     );
+
+    /** 교수 요약 집계를 위한 멀티 프로젝트 조회 */
+    List<Assignment> findByProject_IdIn(List<Long> projectIds);
 }

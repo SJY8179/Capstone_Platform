@@ -120,3 +120,23 @@ export interface EventDto {
   type?: EventType;
   location?: string | null;
 }
+
+/** ----- Professor Review Workflow ----- */
+export type ReviewAction = "APPROVE" | "REJECT";
+
+export interface ProfessorPendingReviewItem {
+  assignmentId: number;
+  projectId: number;
+  projectName?: string | null;
+  teamName?: string | null;
+  title?: string | null;
+  submittedAt?: string | null; // ISO
+  dueDate?: string | null;     // ISO
+  status?: "PENDING" | "ONGOING" | "COMPLETED";
+}
+
+export interface BulkReviewResult {
+  successCount: number;
+  failCount: number;
+  failedIds: number[];
+}

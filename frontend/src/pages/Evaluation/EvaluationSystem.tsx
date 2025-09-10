@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Star, FileText, Download, Plus, MessageSquare, Eye } from 'lucide-react';
-import { UserRole } from '@/App';
+import type { UserRole } from "@/types/user";
 import { listProjectFeedback } from '@/api/feedback';
 import type { FeedbackDto } from '@/types/domain';
 
