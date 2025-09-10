@@ -146,57 +146,42 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
 
   /** ------- 액션 처리 ------- */
 
-  // 단건 승인/반려: 성공 시 로컬 즉시 반영, 실패/부분 성공 대비로 필요 시 재조회
+  // 단건 승인/반려: 낙관적 업데이트(즉시 제거/상태반영) + 서버 재조회로 일관성 보정
   const handleSingle = async (
     action: "APPROVE" | "REJECT",
     assignmentId: number,
     projectIdForRow: number
   ) => {
+    // 1) 즉시 반영: 두 경우 모두 '검토 대기'에서 제거 + 카운트 감소
+    setData((prev) => {
+      if (!prev) return prev;
+      const afterDec = decPendingCount(prev, 1) as ProfessorSummary;
+      const afterRemove = {
+        ...afterDec,
+        pendingReviews: afterDec.pendingReviews.filter(
+          (p) => p.assignmentId !== assignmentId
+        ),
+      } as ProfessorSummary;
+
+      const statusAfter = action === "APPROVE" ? "COMPLETED" : "ONGOING";
+      return patchRecentStatus(afterRemove, assignmentId, statusAfter);
+    });
+
     try {
       setBulkLoading(true);
-      const { successCount } = await bulkReview(action, [
-        { assignmentId, projectId: projectIdForRow },
-      ]);
-
-      if (successCount === 1) {
-        setData((prev) => {
-          if (!prev) return prev;
-
-          // 승인: 대기 카운트 1 감소 + 대기 목록에서 제거
-          // 반려: 대기 목록/카운트 유지(PENDING이므로 계속 남음)
-          const afterMetrics =
-            action === "APPROVE" ? decPendingCount(prev, 1)! : prev;
-
-          const afterPending =
-            action === "APPROVE"
-              ? afterMetrics.pendingReviews?.filter(
-                  (p) => p.assignmentId !== assignmentId
-                )
-              : afterMetrics.pendingReviews;
-
-          const statusAfter = action === "APPROVE" ? "COMPLETED" : "PENDING";
-          const patchedRecent = patchRecentStatus(
-            { ...afterMetrics, pendingReviews: afterPending ?? [] } as ProfessorSummary,
-            assignmentId,
-            statusAfter
-          );
-          return patchedRecent;
-        });
-      } else {
-        // 이례적으로 실패/부분 성공이면 서버가 진실원천 → 재조회
-        await refreshSummary();
-      }
-
+      await bulkReview(action, [{ assignmentId, projectId: projectIdForRow }]);
       toast.success(action === "APPROVE" ? "승인 완료" : "반려 처리");
     } catch (e) {
       console.error(e);
       toast.error(action === "APPROVE" ? "승인 실패" : "반려 실패");
+      // 실패 시 서버가 진실원천 -> 재조회로 롤백/보정
     } finally {
       setBulkLoading(false);
+      await refreshSummary(); // 성공/실패 모두 최종 싱크
     }
   };
 
-  // 일괄 승인: 전부 성공이면 로컬 즉시 반영, 부분 성공이면 안전하게 재조회
+  // 일괄 승인: 전부 성공이면 로컬 즉시 반영, 그래도 마지막엔 재조회로 싱크
   const onBulkApprove = async () => {
     const items = data?.pendingReviews ?? [];
     if (!items.length) return;
@@ -212,17 +197,16 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
       const { successCount, failCount } = await bulkReview("APPROVE", payload);
 
       if (successCount === items.length) {
+        // (옵션) 즉시 반영
         const ids = payload.map((p) => p.assignmentId);
         setData((prev) => {
           if (!prev) return prev;
-          const afterMetrics = decPendingCount(prev, successCount)!;
-          const afterPending: ProfessorSummary["pendingReviews"] = [];
+          const afterMetrics = decPendingCount(prev, successCount)! as ProfessorSummary;
           const patchedRecent = patchRecentStatusesCompleted(afterMetrics, ids);
-          return { ...patchedRecent, pendingReviews: afterPending ?? [] };
+          return { ...patchedRecent, pendingReviews: [] };
         });
       } else {
-        // 어떤 항목이 실패했는지 응답으로 알 수 없으므로 재조회
-        await refreshSummary();
+        // 어떤 항목이 실패했는지 특정하기 어렵기 때문에 재조회로 맞춤
       }
 
       toast.success(`일괄 검토 완료 — 성공 ${successCount}건, 실패 ${failCount}건`);
@@ -231,6 +215,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
       toast.error("일괄 검토 실패");
     } finally {
       setBulkLoading(false);
+      await refreshSummary(); // 항상 최종 싱크
     }
   };
 
