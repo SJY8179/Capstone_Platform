@@ -83,22 +83,22 @@ export default function App() {
         if (currentUser.role === "professor") return <ProfessorDashboard projectId={projectId} />;
         if (currentUser.role === "admin") return <AdminDashboard projectId={projectId} />;
         return null;
-      
+
       case "projects":
         return <ProjectManagement userRole={currentUser.role} />;
-      
+
       case "teams":
         return <TeamManagement userRole={currentUser.role} />;
-      
+
       case "evaluation":
         return <EvaluationSystem userRole={currentUser.role} projectId={projectId} />;
-      
+
       case "users":
         return currentUser.role === "admin" ? <UserManagement /> : <div>권한이 없습니다.</div>;
-      
+
       case "schedule":
         return <ScheduleManagement userRole={currentUser.role} />;
-      
+
       default:
         return <div>페이지를 찾을 수 없습니다.</div>;
     }
