@@ -38,7 +38,7 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "title": "A-3days",
+  "title": "C-3days",
   "dueDateIso": "{{D_PLUS3}}",
   "status": "PENDING"
 }
