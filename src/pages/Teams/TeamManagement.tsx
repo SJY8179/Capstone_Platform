@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -9,11 +9,12 @@ import {
   Search, Plus, Users, UserPlus, Settings, MessageSquare,
   CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
-import { UserRole } from "@/App";
+import { UserRole } from "@/types/user";
 import { listTeams, listInvitableUsers } from "@/api/teams";
 import type { TeamListDto, UserDto } from "@/types/domain";
 import { InviteMemberModal } from "@/components/Teams/InviteMemberModal";
 import { CreateTeamModal } from "@/components/Teams/CreateTeamModal";
+import { TeamSettingsModal } from "@/components/Teams/TeamSettingsModal";
 
 interface TeamManagementProps {
   userRole: UserRole;
@@ -29,43 +30,40 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 팀원 초대 modal state
+  // modal state
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // data state
   const [selectedTeam, setSelectedTeam] = useState<TeamListDto | null>(null);
   const [invitableUsers, setInvitableUsers] = useState<UserDto[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
 
-  // 팀 생성 modal state
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const fetchTeams = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await listTeams();
+      setTeams(data ?? []);
+    } catch (error) {
+      console.error("팀 목록을 불러오는 데 실패했습니다:", error);
+      // TODO: 사용자에게 에러 토스트 메시지 표시
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await listTeams();
-        setTeams(data ?? []);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    fetchTeams();
+  }, [fetchTeams]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase().replace(/\s/g, '');
     if (!qq) return teams;
-    return teams.filter(
-      (t) => {
-        const teamName = t.name.toLowerCase().replace(/\s/g, '');
-        const projectName = t.project.toLowerCase().replace(/\s/g, '');
-        
-        return (
-          teamName.includes(qq) ||
-          projectName.includes(qq) ||
-          t.members.some((m) =>
-            m.name.toLowerCase().replace(/\s/g, "").includes(qq)
-          )
-        );
-      }
+    return teams.filter(t =>
+      t.name.toLowerCase().replace(/\s/g, '').includes(qq) ||
+      t.project.toLowerCase().replace(/\s/g, '').includes(qq) ||
+      t.members.some(m => m.name.toLowerCase().replace(/\s/g, '').includes(qq))
     );
   }, [teams, q]);
 
@@ -76,39 +74,27 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     try {
       setInvitableUsers(await listInvitableUsers(team.id));
     } catch (error) {
-      console.error("[팀원 초대 목록 오류]Failed to fetch team member list:", error);
+      console.error("[초대 가능 사용자 목록 조회 실패]Failed to fetch team member list:", error);
     } finally {
       setIsUsersLoading(false);
     }
   };
 
-  const handleCloseInviteModal = () => {
-    setIsInviteModalOpen(false);
-    setSelectedTeam(null);
-    setInvitableUsers([]);
-  };
-
-  const handleInviteSuccess = (teamId: number, newUser: UserDto) => {
-    setTeams(currentTeams =>
-      currentTeams.map(team => {
-        if (team.id === teamId) {
-          const newMember = {
-            id: newUser.id,
-            name: newUser.name,
-            email: newUser.email,
-            // avatar?: string | undefined,
-            role: "member" as const,
-            status: "active" as const,
-          };
-          return { ...team, members: [...team.members, newMember] };
-        }
-        return team;
-      })
-    );
+  const handleOpenSettingsModal = (team: TeamListDto) => {
+    setSelectedTeam(team);
+    setIsSettingsModalOpen(true);
   };
 
   const handleCreateSuccess = (newTeam: TeamListDto) => {
     setTeams(currentTeams => [newTeam, ...currentTeams]);
+  };
+
+  const handleTeamUpdate = (updatedTeam: TeamListDto) => {
+    setTeams(currentTeams => currentTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
+  };
+
+  const handleTeamDelete = (teamId: number) => {
+    setTeams(currentTeams => currentTeams.filter(t => t.id !== teamId));
   };
 
   const actions = (team: TeamListDto) => (
@@ -118,7 +104,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <Button size="sm" variant="outline" onClick={() => handleOpenInviteModal(team)}>
             <UserPlus className="h-4 w-4 mr-1" /> 팀원 초대
           </Button>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => handleOpenSettingsModal(team)}>
             <Settings className="h-4 w-4 mr-1" /> 팀 설정
           </Button>
         </>
@@ -257,19 +243,26 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
         )}
       </div>
 
-      <InviteMemberModal
-        isOpen={isInviteModalOpen}
-        onClose={handleCloseInviteModal}
-        team={selectedTeam}
-        users={invitableUsers}
-        isLoading={isUsersLoading}
-        onInviteSuccess={handleInviteSuccess}
-      />
-
       <CreateTeamModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateSuccess={handleCreateSuccess}
+      />
+      <InviteMemberModal
+        isOpen={isInviteModalOpen}
+        onClose={() => { setIsInviteModalOpen(false); setSelectedTeam(null); }}
+        team={selectedTeam}
+        users={invitableUsers}
+        isLoading={isUsersLoading}
+        onInviteSuccess={fetchTeams}
+      />
+      <TeamSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => { setIsSettingsModalOpen(false); setSelectedTeam(null); }}
+        team={selectedTeam}
+        onTeamUpdate={handleTeamUpdate}
+        onTeamDelete={handleTeamDelete}
+        onRefreshNeeded={fetchTeams}
       />
     </div >
   );

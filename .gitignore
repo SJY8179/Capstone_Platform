@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local Environment Variables
+.env.development
+
+# Build and Linter Configurations
+vite.config.ts
+eslint.config.js

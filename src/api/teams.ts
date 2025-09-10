@@ -1,40 +1,52 @@
 ﻿import { http } from "@/api/http";
 import type { TeamListDto, UserDto } from "@/types/domain";
 
-export async function listTeams(): Promise<TeamListDto[]> {
+/** 내가 속한 팀 목록만 */
+export async function listTeams() {
+  const { data } = await http.get<TeamListDto[]>("/teams/my");
+  return data;
+}
+
+/** (관리자용 등) 전체 팀 목록이 필요하면 이걸 사용 */
+export async function listAllTeams(): Promise<TeamListDto[]> {
   const { data } = await http.get<TeamListDto[]>("/teams");
   return data;
 }
 
+/** 초대 가능한 유저 목록 */
 export async function listInvitableUsers(teamId: number): Promise<UserDto[]> {
-  // const response = await fetch(`/api/teams/${teamId}/invitable-users`);
-
-  // if (!response.ok) {
-  //   throw new Error("Failed to fetch invitable users");
-  // }
-
-  // return response.json();
   const { data } = await http.get<UserDto[]>(`/teams/${teamId}/invitable-users`);
   return data;
 }
 
+/** 팀원 초대 */
 export async function addTeamMember(teamId: number, userId: number): Promise<void> {
-  // const response = await fetch(`/api/teams/${teamId}/members`, {
-  //   method: 'POST',
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //   },
-  //   body: JSON.stringify({ userId }),
-  // });
-
-  // if (!response.ok) {
-  //   const errorData = await response.json().catch(() => ({ message: '팀원 추가에 실패했습니다.' }));
-  //   throw new Error(errorData.message || '팀원 추가에 실패했습니다.');
-  // }
   await http.post(`/teams/${teamId}/members`, { userId });
 }
 
+/** 팀 생성(리더만) */
 export async function createTeam(name: string, description: string): Promise<TeamListDto> {
-  const response = await http.post<TeamListDto>('/teams', { name, description });
-  return response.data;
+  const { data } = await http.post<TeamListDto>('/teams', { name, description });
+  return data;
+}
+
+/** 팀 정보 수정(리더만) */
+export async function updateTeam(teamId: number, name: string, description: string): Promise<TeamListDto> {
+  const { data } = await http.put<TeamListDto>(`/teams/${teamId}`, { name, description });
+  return data;
+}
+
+/** 리더 변경(리더만) */
+export async function changeLeader(teamId: number, newLeaderId: number): Promise<void> {
+  await http.patch(`/teams/${teamId}/leader`, { newLeaderId });
+}
+
+/** 팀원 삭제(리더만) */
+export async function removeMember(teamId: number, memberId: number): Promise<void> {
+  await http.delete(`/teams/${teamId}/members/${memberId}`);
+}
+
+/** 팀 삭제(리더만) */
+export async function deleteTeam(teamId: number): Promise<void> {
+  await http.delete(`/teams/${teamId}`);
 }
