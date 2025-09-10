@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from "react";
+﻿﻿import React, { useEffect, useState, useCallback } from "react";
 import {
   Home,
   FolderOpen,
@@ -16,10 +16,11 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { UserRole, ActivePage } from "../../App";
-import { listSchedulesInRange } from "@/api/schedules";
+import { ActivePage } from "../../App";
+import type { UserRole } from "@/types/user";
+import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type { ScheduleDto, SchedulePriority, ScheduleType } from "@/types/domain";
-import { scheduleBus } from "@/lib/schedule-bus"; // 전역 이벤트 버스
+import { scheduleBus } from "@/lib/schedule-bus";
 
 interface SidebarProps {
   userRole: UserRole;
@@ -27,7 +28,7 @@ interface SidebarProps {
   onPageChange: (page: ActivePage) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  /** 현재 보고 있는 프로젝트 id (없으면 백엔드 첫 프로젝트 기준) */
+  /** 현재 프로젝트 id. 없으면 일정 호출 안 함 */
   projectId?: number;
 }
 
@@ -59,7 +60,6 @@ export function Sidebar({
   const [upcoming, setUpcoming] = useState<UiSchedule[]>([]);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
 
-  /* 메뉴 구성 */
   const getMenuItems = () => {
     const common = [
       { id: "dashboard" as ActivePage, label: "대시보드", icon: Home },
@@ -77,36 +77,31 @@ export function Sidebar({
       { id: "evaluation" as ActivePage, label: "평가 시스템", icon: ClipboardCheck },
     ];
     switch (userRole) {
-      case "student":
-        return student;
-      case "professor":
-        return professor;
-      case "admin":
-        return admin;
-      default:
-        return common;
+      case "student": return student;
+      case "professor": return professor;
+      case "admin": return admin;
+      default: return common;
     }
   };
 
-  const menuItems = getMenuItems();
-
-  /** 일정 로드 (재사용 가능하게 분리) */
+  /** 일정 로드 – projectId 없으면 호출 안 함, 403은 조용히 처리 */
   const reloadUpcoming = useCallback(async () => {
-    let alive = true;
+    if (!projectId) {
+      setUpcoming([]);
+      return;
+    }
     try {
       setLoadingUpcoming(true);
 
       const from = new Date();
       const to = new Date();
-      to.setDate(from.getDate() + 14); // 2주
+      to.setDate(from.getDate() + 14);
 
       const rows: ScheduleDto[] = await listSchedulesInRange({
         from: toYMDLocal(from),
         to: toYMDLocal(to),
-        projectId, // 명시적으로 전달. 없으면 백엔드 첫 프로젝트 사용
+        projectId,
       });
-
-      if (!alive) return;
 
       const mapType = (t?: ScheduleType): UiSchedule["type"] =>
         t === "deadline" || t === "meeting" || t === "task" || t === "presentation" ? t : "task";
@@ -118,7 +113,7 @@ export function Sidebar({
         .map((s) => ({
           id: s.id,
           title: s.title ?? "(제목 없음)",
-          date: s.date!, // 필터링됨
+          date: s.date!,
           time: s.time ?? undefined,
           type: mapType(s.type),
           priority: mapPriority(s.priority),
@@ -127,33 +122,32 @@ export function Sidebar({
         .slice(0, 3);
 
       setUpcoming(mapped);
-    } catch (e) {
-      console.error("Failed to load upcoming schedules:", e);
-      setUpcoming([]);
+    } catch (e: any) {
+      // 403이면 ‘권한 없음’으로 간주하고 조용히 비우기
+      if (e?.status === 403 || e?.response?.status === 403) {
+        setUpcoming([]);
+      } else {
+        // 그 외 오류는 개발 중에만 보자
+        console.debug("Failed to load upcoming schedules:", e);
+        setUpcoming([]);
+      }
     } finally {
       setLoadingUpcoming(false);
     }
-    return () => {
-      alive = false;
-    };
   }, [projectId]);
 
-  /* 최초/프로젝트 변경 시 로드 + 전역 변경 이벤트 구독 */
   useEffect(() => {
-    let unsub = () => {};
     reloadUpcoming();
-
-    // 다른 화면(EventEditor, Calendar 등)에서 일정이 바뀌면 즉시 반영
-    unsub = scheduleBus.subscribe(() => {
+    const unsub = scheduleBus.subscribe(() => {
+      // 저장/삭제 직후 캐시 무효화 후 재조회
+      if (projectId) invalidateSchedulesCache(projectId);
       reloadUpcoming();
     });
-
     return () => {
-      unsub();
+      try { void unsub(); } catch { }
     };
-  }, [reloadUpcoming]);
+  }, [reloadUpcoming, projectId]);
 
-  /* 드롭다운을 펼칠 때마다 최신화 (펼친 직후 스냅 최신화) */
   useEffect(() => {
     if (showScheduleDropdown) {
       reloadUpcoming();
@@ -161,11 +155,10 @@ export function Sidebar({
   }, [showScheduleDropdown, reloadUpcoming]);
 
   const formatScheduleDate = (dateStr: string) => {
-    const date = new Date(dateStr + "T00:00:00"); // 로컬 렌더 안전
+    const date = new Date(dateStr + "T00:00:00");
     const today = new Date();
     const tomorrow = new Date();
     tomorrow.setDate(today.getDate() + 1);
-
     const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
     if (same(date, today)) return "오늘";
     if (same(date, tomorrow)) return "내일";
@@ -181,11 +174,9 @@ export function Sidebar({
 
   return (
     <div
-      className={`${
-        collapsed ? "w-16" : "w-64"
-      } bg-sidebar border-r border-sidebar-border transition-all duration-300 relative`}
+      className={`${collapsed ? "w-16" : "w-64"
+        } bg-sidebar border-r border-sidebar-border transition-all duration-300 relative`}
     >
-      {/* 접기/펼치기 */}
       <Button
         variant="ghost"
         size="sm"
@@ -197,7 +188,6 @@ export function Sidebar({
       </Button>
 
       <div className={`${collapsed ? "p-2" : "p-6"} transition-all duration-300`}>
-        {/* 로고/타이틀 */}
         <div className={`flex items-center gap-2 mb-8 ${collapsed ? "justify-center" : ""}`}>
           <BookOpen className="h-8 w-8 text-primary flex-shrink-0" />
           {!collapsed && (
@@ -208,9 +198,8 @@ export function Sidebar({
           )}
         </div>
 
-        {/* 메뉴 */}
         <nav className="space-y-2">
-          {menuItems.map((item) => {
+          {getMenuItems().map((item) => {
             const Icon = item.icon;
             return (
               <Button
@@ -227,7 +216,6 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* 하단: 일정/공지/설정 */}
         <div className="mt-8 pt-8 border-t border-sidebar-border">
           <div className="space-y-2">
             <div>
@@ -246,14 +234,20 @@ export function Sidebar({
 
               {!collapsed && showScheduleDropdown && (
                 <div className="mt-2 ml-4 space-y-1 border-l border-sidebar-border pl-4">
-                  <div className="text-xs font-medium text-muted-foreground mb-2">다가오는 일정</div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    다가오는 일정
+                  </div>
 
                   {loadingUpcoming && (
                     <div className="text-xs text-muted-foreground py-1">불러오는 중…</div>
                   )}
 
                   {!loadingUpcoming && upcoming.length === 0 && (
-                    <div className="text-xs text-muted-foreground py-1">예정된 일정이 없습니다.</div>
+                    <div className="text-xs text-muted-foreground py-1">
+                      {projectId
+                        ? "예정된 일정이 없습니다."
+                        : "프로젝트를 선택하면 일정이 표시됩니다."}
+                    </div>
                   )}
 
                   {upcoming.map((s) => (

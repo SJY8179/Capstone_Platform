@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿﻿import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -18,13 +18,22 @@ import {
   TrendingUp,
   Settings,
   Download,
+  Plus
 } from "lucide-react";
 import { listProjects } from "@/api/projects";
 import { getProjectDashboardStatus } from "@/api/dashboard";
 import type { ProjectListDto, ProjectStatus, DashboardStatus } from "@/types/domain";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 interface AdminDashboardProps {
-  projectId: number; // 현재는 단일 프로젝트 기준
+  projectId?: number;
 }
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -38,16 +47,23 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
   const [status, setStatus] = useState<DashboardStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [projectData, statusData] = await Promise.all([
-          listProjects(),
-          getProjectDashboardStatus(projectId),
-        ]);
+        // 프로젝트 목록은 항상 가능
+        const projectData = await listProjects();
         setProjects(projectData);
+
+        // projectId 없으면 상태는 N/A
+        if (!projectId) {
+          setStatus(null);
+          return;
+        }
+
+        const statusData = await getProjectDashboardStatus(projectId);
         setStatus(statusData);
       } catch (error) {
         console.error("Failed to fetch admin dashboard data:", error);
@@ -96,12 +112,22 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
     }
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  if (loading) return <div>Loading...</div>;
 
   return (
     <div className="space-y-6">
+      {/* 헤더 + 새 일정 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">관리자 대시보드</h2>
+          <p className="text-muted-foreground">플랫폼 전반 현황과 프로젝트 상태를 확인합니다.</p>
+        </div>
+        <Button size="sm" onClick={() => (projectId ? null : setNeedProjectOpen(true))}>
+          <Plus className="h-4 w-4 mr-2" />
+          새 일정
+        </Button>
+      </div>
+
       {/* 상단 요약 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -232,7 +258,7 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
       </div>
 
       {/* 캘린더 위젯 */}
-      <CalendarWidget />
+      <CalendarWidget projectId={projectId} />
 
       {/* 시스템 상태 */}
       <Card>
@@ -274,6 +300,23 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* 안내 다이얼로그: 프로젝트 미선택/미소속 */}
+      {!projectId && (
+        <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>프로젝트 연결 필요</DialogTitle>
+              <DialogDescription>
+                새 일정을 추가하려면 특정 프로젝트를 선택하거나 권한이 필요합니다.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>확인</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

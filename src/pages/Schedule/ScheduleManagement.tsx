@@ -1,20 +1,41 @@
-﻿import { useEffect, useMemo, useState, useCallback } from "react";
+﻿﻿// src/pages/Schedule/ScheduleManagement.tsx
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, FileText, Users, AlertCircle, Video, Trash2 } from "lucide-react";
-import { UserRole } from "@/App";
-import { listSchedules } from "@/api/schedules";
+import { Calendar, FileText, Users, AlertCircle, Video, Trash2, Plus } from "lucide-react";
+import type { UserRole } from "@/types/user";
+import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type { ScheduleDto, ScheduleType, EventType } from "@/types/domain";
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { deleteEvent } from "@/api/events";
-import { listProjects } from "@/api/projects";
-import { scheduleBus } from "@/lib/schedule-bus"; //사이드바 즉시 갱신용
+import { scheduleBus } from "@/lib/schedule-bus";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
-interface ScheduleManagementProps {
+export interface ScheduleManagementProps {
   userRole: UserRole;
+  projectId?: number;
+}
+
+function toYMD(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.toISOString().slice(0, 10);
+}
+function addDays(d: Date, days: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  x.setHours(0, 0, 0, 0);
+  return x;
 }
 
 function isEventId(id: string) {
@@ -26,60 +47,86 @@ function parseEventId(id: string): number | null {
 }
 function scheduleTypeToEventType(t?: ScheduleType): EventType {
   switch (t) {
-    case "meeting": return "MEETING";
-    case "deadline": return "DEADLINE";
-    case "presentation": return "PRESENTATION";
+    case "meeting":
+      return "MEETING";
+    case "deadline":
+      return "DEADLINE";
+    case "presentation":
+      return "PRESENTATION";
     case "task":
-    default: return "ETC";
+    default:
+      return "ETC";
   }
 }
 
-export function ScheduleManagement({ userRole }: ScheduleManagementProps) {
+export function ScheduleManagement({ userRole, projectId }: ScheduleManagementProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<"upcoming" | "all" | "past">("upcoming");
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [projectId, setProjectId] = useState<number | null>(null);
-
   // editor modal
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ScheduleDto | null>(null);
 
+  // 프로젝트 필요 안내 모달
+  const [needProjectOpen, setNeedProjectOpen] = useState(false);
+
+  // 탭에 따라 조회 기간 설정
+  const range = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (selectedTab) {
+      case "upcoming":
+        // 오늘 ~ +60일
+        return { from: toYMD(today), to: toYMD(addDays(today, 60)) };
+      case "past":
+        // -180일 ~ 오늘
+        return { from: toYMD(addDays(today, -180)), to: toYMD(today) };
+      case "all":
+      default:
+        // -180일 ~ +180일
+        return { from: toYMD(addDays(today, -180)), to: toYMD(addDays(today, 180)) };
+    }
+  }, [selectedTab]);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listSchedules();
+      if (!projectId) {
+        // ✅ 미소속이면 API 콜 없이 빈 목록 유지
+        setSchedules([]);
+        return;
+      }
+      const rows = await listSchedulesInRange({
+        from: range.from,
+        to: range.to,
+        projectId, // ← 반드시 프로젝트 기준
+      });
       setSchedules(rows);
     } catch (error) {
       console.error("Failed to fetch schedules:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [range.from, range.to, projectId]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // 첫 프로젝트 id 확보 (일정 생성/이벤트 수정/삭제에 필요)
-  useEffect(() => {
-    (async () => {
-      try {
-        const ps = await listProjects();
-        setProjectId(ps?.[0]?.id ?? null);
-      } catch (e) {
-        console.error(e);
-      }
-    })();
-  }, []);
-
   const getTypeIcon = (type?: ScheduleType) => {
     switch (type) {
-      case "deadline": return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case "meeting": return <Users className="h-4 w-4 text-green-500" />;
-      case "presentation": return <Video className="h-4 w-4 text-blue-500" />;
-      case "task": default: return <FileText className="h-4 w-4 text-purple-500" />;
+      case "deadline":
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case "meeting":
+        return <Users className="h-4 w-4 text-green-500" />;
+      case "presentation":
+        return <Video className="h-4 w-4 text-blue-500" />;
+      case "task":
+      default:
+        return <FileText className="h-4 w-4 text-purple-500" />;
     }
   };
 
@@ -87,10 +134,8 @@ export function ScheduleManagement({ userRole }: ScheduleManagementProps) {
     if (!dateString) return "날짜 없음";
     const date = new Date(dateString);
     const today = new Date();
-    const tomorrow = new Date();
+    const tomorrow = addDays(today, 1);
     today.setHours(0, 0, 0, 0);
-    tomorrow.setHours(0, 0, 0, 0);
-    tomorrow.setDate(today.getDate() + 1);
 
     if (date.toDateString() === today.toDateString()) return "오늘";
     if (date.toDateString() === tomorrow.toDateString()) return "내일";
@@ -127,27 +172,34 @@ export function ScheduleManagement({ userRole }: ScheduleManagementProps) {
   }, [schedules, searchQuery, selectedTab]);
 
   const onCreateClick = () => {
+    if (!projectId) {
+      setNeedProjectOpen(true);
+      return;
+    }
     setEditing(null);
     setEditorOpen(true);
   };
 
   const onEditClick = (row: ScheduleDto) => {
     if (!isEventId(row.id)) return;
+    if (!projectId) return;
     setEditing(row);
     setEditorOpen(true);
   };
 
   const onDeleteClick = async (row: ScheduleDto) => {
     if (!isEventId(row.id)) return;
+    if (!projectId) return;
     const idNum = parseEventId(row.id);
-    if (!idNum || !projectId) return;
+    if (!idNum) return;
 
     if (!confirm(`"${row.title}" 일정을 삭제할까요?`)) return;
 
     try {
       await deleteEvent(projectId, idNum);
+      invalidateSchedulesCache(projectId);  // ★ 캐시 무효화
       await refresh();
-      scheduleBus.emitChanged(); //사이드바/다른 위젯 즉시 갱신
+      scheduleBus.emitChanged();
     } catch (e: any) {
       alert(e?.message ?? "삭제에 실패했습니다.");
     }
@@ -165,11 +217,14 @@ export function ScheduleManagement({ userRole }: ScheduleManagementProps) {
             {userRole === "student"
               ? "내 프로젝트 일정을 확인하고 관리하세요."
               : userRole === "professor"
-              ? "담당 과목/프로젝트의 일정을 관리하세요."
-              : "전체 일정 현황을 확인하고 관리하세요."}
+                ? "담당 과목/프로젝트의 일정을 관리하세요."
+                : "전체 일정 현황을 확인하고 관리하세요."}
           </p>
         </div>
-        <Button onClick={onCreateClick} disabled={!projectId}>새 일정 추가</Button>
+        <Button onClick={onCreateClick}>
+          <Plus className="h-4 w-4 mr-2" />
+          새 일정 추가
+        </Button>
       </div>
 
       {/* 검색 */}
@@ -257,38 +312,62 @@ export function ScheduleManagement({ userRole }: ScheduleManagementProps) {
                 {selectedTab === "upcoming"
                   ? "다가오는 일정이 없습니다."
                   : selectedTab === "past"
-                  ? "지난 일정이 없습니다."
-                  : "검색 조건에 맞는 일정이 없습니다."}
+                    ? "지난 일정이 없습니다."
+                    : "검색 조건에 맞는 일정이 없습니다."}
               </p>
             </div>
           )}
         </TabsContent>
       </Tabs>
 
-      {/* 이벤트 생성/수정 모달 */}
-      <EventEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        projectId={projectId ?? 0}
-        initial={
-          editing
-            ? {
-                id: parseEventId(editing.id) ?? undefined,
-                title: editing.title ?? "",
-                date: editing.date ?? "",
-                startTime: editing.time ?? "",
-                endTime: editing.endTime ?? "",
-                type: scheduleTypeToEventType(editing.type),
-                location: editing.location ?? "",
-              }
-            : undefined
-        }
-        onSaved={async () => {
-          setEditorOpen(false);
-          await refresh();
-          scheduleBus.emitChanged(); //저장 직후 전역 갱신
-        }}
-      />
+      {/* 이벤트 생성/수정 모달 (프로젝트가 있을 때만) */}
+      {projectId && (
+        <EventEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          projectId={projectId}
+          initial={
+            editing
+              ? {
+                  id: parseEventId(editing.id) ?? undefined,
+                  title: editing.title ?? "",
+                  date: editing.date ?? "",
+                  startTime: editing.time ?? "",
+                  endTime: editing.endTime ?? "",
+                  type: scheduleTypeToEventType(editing.type),
+                  location: editing.location ?? "",
+                }
+              : undefined
+          }
+          onSaved={async () => {
+            setEditorOpen(false);
+            invalidateSchedulesCache(projectId);
+            await refresh();
+            scheduleBus.emitChanged();
+          }}
+        />
+      )}
+
+      {/* 프로젝트 안내 모달 (미소속) */}
+      {!projectId && (
+        <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>프로젝트 참여가 필요합니다</DialogTitle>
+              <DialogDescription>
+                일정을 추가하려면 먼저 프로젝트에 참여하거나 새 프로젝트를 생성하세요.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>
+                확인
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
+
+export default ScheduleManagement;

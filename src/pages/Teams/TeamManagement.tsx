@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from "react";
+﻿﻿import React, { useState, useEffect, useMemo } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import {
   Search, Plus, Users, UserPlus, Settings, MessageSquare,
   CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
-import { UserRole } from "@/App";
+import type { UserRole } from "@/types/user";
 import { listTeams } from "@/api/teams";
 import type { TeamListDto } from "@/types/domain";
 
