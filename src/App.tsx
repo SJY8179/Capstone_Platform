@@ -28,7 +28,7 @@ export type ActivePage =
   | "schedule"
   // --- 업데이트된 부분 시작 ---
   | "notifications" // 3. 'notifications' 타입 추가
-  | "settings"; // 4. 'settings' 타입 추가
+  | "settings";
   // --- 업데이트된 부분 끝 ---
 
 export default function App() {
@@ -59,7 +59,7 @@ export default function App() {
   };
 
   // --- 업데이트된 부분 시작 ---
-  // 5. 알림 페이지로 이동하는 핸들러 추가
+  // 4. 알림 페이지로 이동하는 핸들러 추가
   const handleNotificationClick = () => {
     setActivePage("notifications");
   };
@@ -159,7 +159,7 @@ export default function App() {
         return <ScheduleManagement userRole={currentUser.role} projectId={activeProjectId ?? undefined} />;
       
       // --- 업데이트된 부분 시작 ---
-      // 6. 라우팅 로직에 'notifications', 'settings' 케이스 추가
+      // 5. 라우팅 로직에 'notifications', 'settings' 케이스 추가
       case "notifications":
         return <NotificationCenter userRole={currentUser.role} />;
 
@@ -184,7 +184,7 @@ export default function App() {
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* --- 업데이트된 부분 시작 --- */}
-        {/* 7. Header에 onNotificationClick prop 전달 */}
+        {/* 6. Header에 onNotificationClick prop 전달 */}
         <Header
           user={currentUser}
           onLogout={handleLogout}

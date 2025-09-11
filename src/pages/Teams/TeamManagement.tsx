@@ -1,4 +1,4 @@
-﻿﻿import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -9,9 +9,12 @@ import {
   Search, Plus, Users, UserPlus, Settings, MessageSquare,
   CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
-import type { UserRole } from "@/types/user";
-import { listTeams } from "@/api/teams";
-import type { TeamListDto } from "@/types/domain";
+import { UserRole } from "@/types/user";
+import { listTeams, listInvitableUsers } from "@/api/teams";
+import type { TeamListDto, UserDto } from "@/types/domain";
+import { InviteMemberModal } from "@/components/Teams/InviteMemberModal";
+import { CreateTeamModal } from "@/components/Teams/CreateTeamModal";
+import { TeamSettingsModal } from "@/components/Teams/TeamSettingsModal";
 
 interface TeamManagementProps {
   userRole: UserRole;
@@ -27,36 +30,81 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await listTeams();
-        setTeams(data ?? []);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  // modal state
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // data state
+  const [selectedTeam, setSelectedTeam] = useState<TeamListDto | null>(null);
+  const [invitableUsers, setInvitableUsers] = useState<UserDto[]>([]);
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
+
+  const fetchTeams = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await listTeams();
+      setTeams(data ?? []);
+    } catch (error) {
+      console.error("팀 목록을 불러오는 데 실패했습니다:", error);
+      // TODO: 사용자에게 에러 토스트 메시지 표시
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
+
   const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    return teams.filter(
-      (t) =>
-        t.name.toLowerCase().includes(qq) ||
-        t.project.toLowerCase().includes(qq) ||
-        t.members.some((m) => m.name.toLowerCase().includes(qq))
+    const qq = q.trim().toLowerCase().replace(/\s/g, '');
+    if (!qq) return teams;
+    return teams.filter(t =>
+      t.name.toLowerCase().replace(/\s/g, '').includes(qq) ||
+      t.project.toLowerCase().replace(/\s/g, '').includes(qq) ||
+      t.members.some(m => m.name.toLowerCase().replace(/\s/g, '').includes(qq))
     );
   }, [teams, q]);
 
-  const actions = (
+  const handleOpenInviteModal = async (team: TeamListDto) => {
+    setSelectedTeam(team);
+    setIsInviteModalOpen(true);
+    setIsUsersLoading(true);
+    try {
+      setInvitableUsers(await listInvitableUsers(team.id));
+    } catch (error) {
+      console.error("[초대 가능 사용자 목록 조회 실패]Failed to fetch team member list:", error);
+    } finally {
+      setIsUsersLoading(false);
+    }
+  };
+
+  const handleOpenSettingsModal = (team: TeamListDto) => {
+    setSelectedTeam(team);
+    setIsSettingsModalOpen(true);
+  };
+
+  const handleCreateSuccess = (newTeam: TeamListDto) => {
+    setTeams(currentTeams => [newTeam, ...currentTeams]);
+  };
+
+  const handleTeamUpdate = (updatedTeam: TeamListDto) => {
+    setTeams(currentTeams => currentTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
+  };
+
+  const handleTeamDelete = (teamId: number) => {
+    setTeams(currentTeams => currentTeams.filter(t => t.id !== teamId));
+  };
+
+  const actions = (team: TeamListDto) => (
     <>
       {userRole === "student" && (
         <>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => handleOpenInviteModal(team)}>
             <UserPlus className="h-4 w-4 mr-1" /> 팀원 초대
           </Button>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => handleOpenSettingsModal(team)}>
             <Settings className="h-4 w-4 mr-1" /> 팀 설정
           </Button>
         </>
@@ -90,7 +138,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <p className="text-muted-foreground">팀을 구성하고 협업을 진행하세요.</p>
         </div>
         {userRole === "student" && (
-          <Button>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> 새 팀 생성
           </Button>
         )}
@@ -107,6 +155,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
         />
       </div>
 
+      {/* 팀 목록 */}
       <div className="space-y-6">
         {filtered.map((t) => {
           const { stats } = t;
@@ -118,11 +167,10 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     {t.name}
                     <Badge variant="secondary">{t.project}</Badge>
                   </CardTitle>
-                  <CardDescription>{t.description ?? "팀 소개가 없습니다."}</CardDescription>
+                  <CardDescription>{t.description || "팀 소개가 없습니다."}</CardDescription>
                 </div>
-                <div className="flex gap-2">{actions}</div>
+                <div className="flex gap-2">{actions(t)}</div>
               </CardHeader>
-
               <CardContent className="space-y-4">
                 {/* 팀장 */}
                 <div className="text-sm">
@@ -160,7 +208,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     <div className="text-xs text-muted-foreground mb-1">총 커밋</div>
                     <div className="text-2xl font-semibold flex items-center gap-2">
                       <GitBranch className="h-5 w-5" />
-                      {stats.commits}
+                      {stats?.commits ?? 0}
                     </div>
                   </div>
 
@@ -168,7 +216,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     <div className="text-xs text-muted-foreground mb-1">회의 횟수</div>
                     <div className="text-2xl font-semibold flex items-center gap-2">
                       <CalendarDays className="h-5 w-5" />
-                      {stats.meetings}
+                      {stats?.meetings ?? 0}
                     </div>
                   </div>
 
@@ -176,7 +224,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                     <div className="text-xs text-muted-foreground mb-1">완료/전체 작업</div>
                     <div className="text-2xl font-semibold flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5" />
-                      {stats.tasks.completed}/{stats.tasks.total}
+                      {stats?.tasks?.completed ?? 0}/{stats?.tasks?.total ?? 0}
                     </div>
                   </div>
                 </div>
@@ -194,6 +242,28 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <div className="text-center text-muted-foreground py-12">표시할 팀이 없습니다.</div>
         )}
       </div>
-    </div>
+
+      <CreateTeamModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreateSuccess={handleCreateSuccess}
+      />
+      <InviteMemberModal
+        isOpen={isInviteModalOpen}
+        onClose={() => { setIsInviteModalOpen(false); setSelectedTeam(null); }}
+        team={selectedTeam}
+        users={invitableUsers}
+        isLoading={isUsersLoading}
+        onInviteSuccess={fetchTeams}
+      />
+      <TeamSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => { setIsSettingsModalOpen(false); setSelectedTeam(null); }}
+        team={selectedTeam}
+        onTeamUpdate={handleTeamUpdate}
+        onTeamDelete={handleTeamDelete}
+        onRefreshNeeded={fetchTeams}
+      />
+    </div >
   );
 }

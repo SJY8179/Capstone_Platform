@@ -1,4 +1,4 @@
-﻿﻿// src/api/schedules.ts
+﻿// src/api/schedules.ts
 import { http } from "@/api/http";
 import type { ScheduleDto } from "@/types/domain";
 
