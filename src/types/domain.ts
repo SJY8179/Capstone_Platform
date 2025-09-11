@@ -1,4 +1,4 @@
-﻿/** ------------ Projects ------------- */
+/** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
 export interface ProjectListDto {
@@ -119,4 +119,31 @@ export interface EventDto {
   endAt?: string;   // ISO
   type?: EventType;
   location?: string | null;
+}
+
+/** ----- Professor Review Workflow ----- */
+export type ReviewAction = "APPROVE" | "REJECT";
+
+export interface ProfessorPendingReviewItem {
+  assignmentId: number;
+  projectId: number;
+  projectName?: string | null;
+  teamName?: string | null;
+  title?: string | null;
+  submittedAt?: string | null; // ISO
+  dueDate?: string | null;     // ISO
+  status?: "PENDING" | "ONGOING" | "COMPLETED";
+}
+
+export interface BulkReviewResult {
+  successCount: number;
+  failCount: number;
+  failedIds: number[];
+}
+
+/** ----- User DTO (teams API) ----- */
+export interface UserDto {
+  id: number;
+  name: string;
+  email: string;
 }
