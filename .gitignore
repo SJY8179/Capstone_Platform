@@ -10,3 +10,11 @@
 frontend/node_modules/
 frontend/.vite/
 frontend/dist/
+
+# Node/Vite (root & frontend)
+node_modules/
+.vite/
+dist/
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
