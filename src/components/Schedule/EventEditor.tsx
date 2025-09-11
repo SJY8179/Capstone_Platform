@@ -21,6 +21,10 @@ import { createEvent, updateEvent } from "@/api/events";
 import { scheduleBus } from "@/lib/schedule-bus";
 import { listProjects } from "@/api/projects";
 import { useAuth } from "@/stores/auth";
+import { toast } from "sonner";
+import { accessErrorMessage, getApiError, isAccessError } from "@/api/http";
+import { http } from "@/api/http";
+import { probeScheduleAccess } from "@/api/schedules";
 
 /* ---------- helpers ---------- */
 function toISO(dateYmd: string, timeHm?: string | ""): string {
@@ -31,6 +35,34 @@ function toISO(dateYmd: string, timeHm?: string | ""): string {
   }
   const dt = new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0);
   return dt.toISOString();
+}
+
+async function fetchProjectOptionsWithFallback(isAdminOrProf: boolean) {
+  // 1차: 기존 API
+  try {
+    const list = await listProjects({ isAdmin: isAdminOrProf /* admin이면 전체 */ });
+    if (Array.isArray(list) && list.length) return list;
+  } catch {}
+
+  // 2차: mine
+  try {
+    const { data } = await http.get("/projects/mine");
+    if (Array.isArray(data) && data.length) return data;
+  } catch {}
+
+  // 3차: teaching (교수용)
+  try {
+    const { data } = await http.get("/projects/teaching");
+    if (Array.isArray(data) && data.length) return data;
+  } catch {}
+
+  // 4차: 전체 (권한 있는 계정만)
+  try {
+    const { data } = await http.get("/projects");
+    if (Array.isArray(data) && data.length) return data;
+  } catch {}
+
+  return [];
 }
 
 /* ---------- types ---------- */
@@ -92,22 +124,40 @@ export function EventEditor({
     if (!open || !mustPickProject) return;
     (async () => {
       try {
-        const list = await listProjects();
-        // 학생은 내 프로젝트만, 교수/관리자는 전체 허용
         const isAdminOrProf = user?.role === "admin" || user?.role === "professor";
+        const raw = await fetchProjectOptionsWithFallback(!!isAdminOrProf);
+
+        // 학생은 내 프로젝트만, 교수/관리자는 전체 허용
         const myId = user?.id ? String(user.id) : undefined;
 
-        const mine = list.filter((p: any) => {
+        const mine = raw.filter((p: any) => {
           if (isAdminOrProf) return true;
           const members = Array.isArray(p.members) ? p.members : [];
           return members.some((m: any) =>
             (myId && m?.id != null && String(m.id) === myId) ||
-            (user?.email && m?.email && String(m.email).toLowerCase() === user.email.toLowerCase()) ||
-            (user?.name && m?.name && String(m.name) === user.name)
+            (user?.email && m?.email && String(m.email).toLowerCase() === String(user.email).toLowerCase()) ||
+            (user?.name && m?.name && String(m.name) === String(user.name))
           );
         });
-        setProjectOptions(mine.map((p: any) => ({ id: p.id, name: p.name })));
-      } catch (e) {
+
+        // **학생만** 권한 프로브 (읽기 불가 프로젝트 숨김)
+        const shouldProbe = user?.role === "student";
+        let filtered = mine;
+        if (shouldProbe) {
+          const probed = await Promise.allSettled(
+            mine.map(async (p: any) => ({ p, ok: await probeScheduleAccess(p.id).catch(() => false) }))
+          );
+          filtered = probed
+            .map((r) => (r.status === "fulfilled" ? r.value : null))
+            .filter(Boolean)
+            .filter((v: any) => v.ok)
+            .map((v: any) => v.p);
+        }
+
+        setProjectOptions(
+          filtered.map((p: any) => ({ id: p.id, name: p.name ?? p.title ?? `프로젝트 #${p.id}` }))
+        );
+      } catch {
         setProjectOptions([]);
       }
     })();
@@ -145,8 +195,17 @@ export function EventEditor({
       }
       onSaved?.();
       scheduleBus.emitChanged(); //저장 성공하면 전역으로 변경 알림
+      toast.success(editMode ? "일정을 저장했어요." : "일정을 추가했어요.");
+      onOpenChange(false);
     } catch (e: any) {
-      alert(e?.message ?? "저장에 실패했습니다.");
+      const err = getApiError(e);
+      if (isAccessError(err)) {
+        toast.error(accessErrorMessage(err.code));
+      } else if (err.status === 400) {
+        toast.error("입력값을 확인해 주세요.");
+      } else {
+        toast.error(err.message || "저장에 실패했습니다.");
+      }
     }
   };
 

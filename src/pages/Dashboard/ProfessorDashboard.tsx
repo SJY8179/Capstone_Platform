@@ -35,12 +35,12 @@ import {
 } from "@/components/ui/dialog";
 import {
   bulkReview,
-  // 아래 2개는 "검토 메모/이력" 기능용 API입니다. (없으면 추가)
-  addReviewNote,
+  // 아래 API는 "검토 이력" 조회용입니다.
   getReviewHistory,
   type ReviewHistoryItem,
   type ReviewAction,
 } from "@/api/professorReview";
+import { scheduleBus } from "@/lib/schedule-bus";
 
 const TEXTS = {
   loading: "로딩중...",
@@ -153,6 +153,41 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
         setLoading(false);
       }
     })();
+  }, []);
+
+  // ★ 일정 변경 버스 구독 → 자동 새로고침
+  useEffect(() => {
+    const handler = () => {
+      // 과도한 호출 방지: 약간 지연 후 새로고침
+      setTimeout(() => {
+        refreshSummary();
+      }, 120);
+    };
+    let off: (() => void) | undefined;
+    try {
+      // onChanged(handler) 형태
+      // @ts-ignore
+      off = scheduleBus.onChanged?.(handler);
+    } catch {}
+    try {
+      // on("changed", h)/off("changed", h) 형태
+      // @ts-ignore
+      if (!off && typeof scheduleBus.on === "function") {
+        // @ts-ignore
+        scheduleBus.on("changed", handler);
+        off = () => {
+          try {
+            // @ts-ignore
+            scheduleBus.off?.("changed", handler);
+          } catch {}
+        };
+      }
+    } catch {}
+    return () => {
+      try {
+        off?.();
+      } catch {}
+    };
   }, []);
 
   const refreshSummary = async () => {
@@ -408,7 +443,15 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           </Button>
           <Button
             size="sm"
-            onClick={() => (projectId ? null : setNeedProjectOpen(true))}
+            onClick={() => {
+              if (!projectId) {
+                // ★ 프로젝트 미지정: 토스트 + 다이얼로그 동시 노출
+                toast.info("프로젝트 참여가 필요합니다.");
+                setNeedProjectOpen(true);
+              } else {
+                // 프로젝트가 지정되어 있다면, 스케줄 탭으로 이동/연결하는 로직을 여기에 추가할 수 있습니다.
+              }
+            }}
           >
             <Plus className="h-4 w-4 mr-2" />
             {TEXTS.newSchedule}
@@ -648,7 +691,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
             </div>
           </CardHeader>
 
-          <CardContent className="p-6 space-y-2">
+        <CardContent className="p-6 space-y-2">
             {recentFiltered.length ? (
               recentFiltered.map((s) => (
                 <div
