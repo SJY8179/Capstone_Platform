@@ -170,8 +170,8 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           const afterPending =
             action === "APPROVE"
               ? afterMetrics.pendingReviews?.filter(
-                  (p) => p.assignmentId !== assignmentId
-                )
+                (p) => p.assignmentId !== assignmentId
+              )
               : afterMetrics.pendingReviews;
 
           const statusAfter = action === "APPROVE" ? "COMPLETED" : "PENDING";
