@@ -329,14 +329,14 @@ export function ScheduleManagement({ userRole, projectId }: ScheduleManagementPr
           initial={
             editing
               ? {
-                  id: parseEventId(editing.id) ?? undefined,
-                  title: editing.title ?? "",
-                  date: editing.date ?? "",
-                  startTime: editing.time ?? "",
-                  endTime: editing.endTime ?? "",
-                  type: scheduleTypeToEventType(editing.type),
-                  location: editing.location ?? "",
-                }
+                id: parseEventId(editing.id) ?? undefined,
+                title: editing.title ?? "",
+                date: editing.date ?? "",
+                startTime: editing.time ?? "",
+                endTime: editing.endTime ?? "",
+                type: scheduleTypeToEventType(editing.type),
+                location: editing.location ?? "",
+              }
               : undefined
           }
           onSaved={async () => {

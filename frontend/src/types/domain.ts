@@ -1,4 +1,4 @@
-﻿/** ------------ Projects ------------- */
+/** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
 export interface ProjectListDto {
@@ -139,4 +139,11 @@ export interface BulkReviewResult {
   successCount: number;
   failCount: number;
   failedIds: number[];
+}
+
+/** ----- User DTO (teams API) ----- */
+export interface UserDto {
+  id: number;
+  name: string;
+  email: string;
 }
