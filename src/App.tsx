@@ -195,5 +195,5 @@ export default function App() {
       </div>
       <Toaster />
     </div>
-  );
+  );  
 }

@@ -149,5 +149,5 @@ export function Header({ user, onLogout, onNotificationClick }: HeaderProps) {
       </div>
     </header>
   );
-}
+}  
 

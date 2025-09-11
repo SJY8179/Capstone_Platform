@@ -235,4 +235,4 @@ export function SettingsPage({ userRole, currentUser }: SettingsPageProps) {
             </Tabs>
         </div>
     );
-}
+}  
