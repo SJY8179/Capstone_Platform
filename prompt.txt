@@ -1,0 +1,124 @@
+너는 리포지토리의 백엔드(Spring Boot, Java 17) 코드를 정적 분석해서, 현재까지 구현된 기능과 아직 개발되지 않은 기능을 한눈에 보여주는 리포트를 작성한다. 코드는 수정하지 말고 읽기 전용 분석만 수행한다.
+
+분석 범위
+
+우선순위 경로:
+
+backend/src/main/java/**
+
+(있다면) backend/Capstone_Platform/src/main/java/**
+
+제외: frontend/**, node_modules/**, dist/**, .vite/**
+
+수행 절차
+
+컨트롤러/엔드포인트 수집
+
+@RestController/@Controller 클래스를 나열.
+
+각 클래스의 @RequestMapping, @GetMapping, @PostMapping, @PutMapping, @PatchMapping, @DeleteMapping를 파싱해서
+
+HTTP 메서드 / 전체 경로 / 메서드명 / DTO(Req/Res) / 인증 필요 여부를 표로 정리.
+
+명령:
+
+grep -R --line-number --include=\*.java -E "@(RestController|Controller)|@RequestMapping|@GetMapping|@PostMapping|@PutMapping|@PatchMapping|@DeleteMapping" backend | sed -n '1,400p'
+
+도메인/서비스 계층 식별
+
+entity, repository, service, dto 패키지의 클래스 목록과 상호참조(예: Service→Repository 호출).
+
+명령:
+
+find backend -type f -name "*.java" | wc -l
+
+grep -R --line-number --include=\*.java -E "package .*\\.(entity|repository|service|dto)" backend | sed -n '1,400p'
+
+보안/인증 흐름 확인
+
+SecurityConfig, Jwt*, User*Details*, Auth*Controller 등 존재 여부 및 필터 체인/허용 url 확인.
+
+로그인/로그아웃/회원가입 엔드포인트가 실제로 있는지 맵핑 경로와 함께 증거 제시.
+
+명령:
+
+grep -R --line-number --include=\*.java -E "SecurityConfig|OncePerRequestFilter|Jwt|UserDetailsService|PasswordEncoder|/login|/logout|/signup|/register" backend | sed -n '1,400p'
+
+팀 기능 확인
+
+팀 생성/삭제/수정/팀원 관리/팀 초대 관련 컨트롤러·서비스·엔티티를 추적해서, 어떤 기능이 구현됨인지 엔드포인트와 함께 정리.
+
+명령:
+
+grep -R --line-number --include=\*.java -E "Team|TeamMember|invite|member|/api/team|/api/teams" backend | sed -n '1,400p'
+
+기능 매핑 & 공란(미구현) 탐지
+
+아래 기능 목록을 기준으로 구현됨/미구현 여부를 분류한다. “구현됨”으로 표기할 때는 **근거(파일경로:줄, 엔드포인트)**를 함께 제시.
+
+인증: 로그인, 로그아웃, 회원가입
+
+팀: 팀 생성, 팀 초대, 팀원 관리, 팀 정보 수정, 팀 삭제
+
+프로젝트: 프로젝트 생성/조회/수정/삭제
+
+설정: 설정 페이지(백엔드 지원 엔드포인트)
+
+(옵션) 초기 제안서 기준: 일정 등록, 상태관리, 스레드 코멘트 & 멘션, 파일 보관함, 간단 위키, 권한 관리, GitHub 연동(Webhook)
+
+위 기능들에 대응하는 엔드포인트/서비스 메서드가 하나도 없으면 → 미구현으로 분류.
+
+산출물(필수)
+
+(A) 요약 문장 (원하는 형식)
+
+지금까지 개발된 기능 : ...
+
+아직 개발되지 않은 기능 : ...
+
+(B) 엔드포인트 표
+
+컬럼: Feature | HTTP | Path | Controller#Method | Request DTO | Response DTO | Auth
+
+(C) 도메인 표
+
+Entity | Repository | Service | 주요 메서드
+
+(D) 백로그 제안
+
+미구현 기능에 대해 구체적 다음 작업 항목(커밋 단위) 체크리스트 제시
+
+출력 형식 (예시)
+
+간결 한국어 + 필요한 곳에 코드블록/표 활용
+
+예)
+
+지금까지 개발된 기능 : 로그인, 로그아웃, 회원가입, 팀 생성, 팀 초대, 팀원 관리, 팀 정보 수정, 팀 삭제
+아직 개발되지 않은 기능 : 프로젝트 생성, 설정 페이지, (옵션) 일정 등록, 상태관리, 스레드 코멘트 & 멘션, 파일 보관함, 간단 위키, 권한 관리, GitHub 연동
+
+[엔드포인트 요약]
+| Feature  | HTTP | Path                  | Controller#Method       | Req | Res | Auth |
+|----------|------|-----------------------|-------------------------|-----|-----|------|
+| 로그인   | POST | /api/auth/login       | AuthController.login    | ... | ... | ❌   |
+| 팀 생성  | POST | /api/teams            | TeamController.create   | ... | ... | ✅   |
+...
+
+[도메인 요약]
+| Entity       | Repository               | Service        | 주요 메서드                      |
+|--------------|--------------------------|----------------|----------------------------------|
+| Team         | TeamRepository           | TeamService    | createTeam, inviteMember, ...    |
+...
+
+[다음 작업 백로그]
+- [ ] 프로젝트 생성 API: POST /api/projects {name, ...} → ProjectService.create()
+- [ ] 설정 조회/수정 API: GET/PUT /api/settings → SettingsService
+...
+
+주의
+
+코드 변경 금지(분석만)
+
+찾은 내용은 파일경로:라인번호와 함께 근거 제시
+
+표/체크리스트는 백엔드 기준으로 작성
