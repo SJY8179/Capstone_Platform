@@ -26,9 +26,10 @@ public class TeamService {
 
     /** 공통: Team -> TeamListDto 매핑 */
     private TeamListDto toDto(Team team) {
-        String projectTitle = projectRepository.findByTeam_Id(team.getId())
-                .map(Project::getTitle)
-                .orElse("미배정 프로젝트");
+        // 한 번만 조회해서 재사용
+        Optional<Project> prjOpt = projectRepository.findByTeam_Id(team.getId());
+        String projectTitle = prjOpt.map(Project::getTitle).orElse("미배정 프로젝트");
+        Long projectId = prjOpt.map(Project::getId).orElse(null);
 
         var teamMembers = teamMemberRepository.findWithUserByTeamId(team.getId());
 
@@ -57,10 +58,6 @@ public class TeamService {
                     );
                 })
                 .toList();
-
-        Long projectId = projectRepository.findByTeam_Id(team.getId())
-                .map(Project::getId)
-                .orElse(null);
 
         int meetings = 0;
         int totalTasks = 0;
@@ -97,14 +94,19 @@ public class TeamService {
         );
     }
 
-    /** 전체 팀 */
+    /** (관리자) 전체 팀 */
     public List<TeamListDto> listTeams() {
         return teamRepository.findAll().stream().map(this::toDto).toList();
     }
 
-    /** 내가 속한 팀만 */
+    /** (공통) 내가 '팀 멤버'로 속한 팀 */
     public List<TeamListDto> listTeamsForUser(Long userId) {
         return teamRepository.findAllByMemberUserId(userId).stream().map(this::toDto).toList();
+    }
+
+    /** (교수) 내가 '담당 교수'인 프로젝트의 팀 */
+    public List<TeamListDto> listTeamsForProfessor(Long professorUserId) {
+        return teamRepository.findAllByProfessorUserId(professorUserId).stream().map(this::toDto).toList();
     }
 
     private static TeamRole toRole(Object raw) {

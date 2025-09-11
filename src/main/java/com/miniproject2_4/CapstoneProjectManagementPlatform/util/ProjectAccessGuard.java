@@ -56,6 +56,23 @@ public class ProjectAccessGuard {
         }
     }
 
+    /** 피드백 생성/수정/삭제 권한: ADMIN || (PROFESSOR && 담당교수) */
+    public void assertCanGiveFeedback(Long projectId, UserAccount user) {
+        if (user == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+        Long userId = user.getId();
+        Role role = user.getRole();
+
+        if (role == Role.ADMIN) return;
+        if (role == Role.PROFESSOR && isProfessorOfProject(projectId, userId)) return;
+
+        // 권한 없음 – 교수지만 담당 교수가 아닌 경우 별도 코드, 그 외는 일반 코드
+        if (role == Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_PROJECT_PROFESSOR");
+        } else {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_ALLOWED_TO_FEEDBACK");
+        }
+    }
+
     private boolean isMember(Long projectId, Long userId) {
         if (projectId == null || userId == null) return false;
         return membershipRepository.existsMembership(projectId, userId);
