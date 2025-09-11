@@ -4,6 +4,7 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.TeamMember;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.TeamMemberId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,11 +23,9 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemb
      * - TeamService/ProjectService에서 사용
      */
     @Query("""
-        select tm
-          from TeamMember tm
-          join fetch tm.user u
-         where tm.team.id = :teamId
-         order by u.name asc
+       select tm from TeamMember tm
+       join fetch tm.user u
+       where tm.team.id = :teamId
     """)
     List<TeamMember> findWithUserByTeamId(@Param("teamId") Long teamId);
 
@@ -44,4 +43,9 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemb
             @Param("teamIds") List<Long> teamIds,
             @Param("role") Role role
     );
+
+    /** TeamId로 팀원 삭제 */
+    @Modifying
+    @Query("DELETE FROM TeamMember tm WHERE tm.id.teamId = :teamId")
+    void deleteByTeamId(@Param("teamId") Long teamId);
 }
