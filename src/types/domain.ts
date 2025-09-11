@@ -38,14 +38,12 @@ export interface TeamListDto {
   lastActivity?: string | null;
 }
 
-/** 피드백 (기존 페이지 호환) */
+/** 피드백 (서버 정식 DTO와 1:1) */
 export interface FeedbackDto {
   id: number;
-  projectId?: number;
-  author?: string;
-  content?: string;
-  rating?: number;
-  createdAt?: string; // ISO
+  author: string;             // 작성자 이름
+  content: string;            // 내용
+  createdAt: string | null;   // ISO (null 허용)
 }
 
 /** ----- Dashboard DTO (백엔드와 1:1) ----- */

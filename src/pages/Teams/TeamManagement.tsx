@@ -10,7 +10,7 @@ import {
   CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
-import { listTeams } from "@/api/teams";
+import { listTeams, listTeachingTeams } from "@/api/teams";
 import type { TeamListDto } from "@/types/domain";
 
 interface TeamManagementProps {
@@ -23,6 +23,30 @@ function formatK(date?: string | null) {
 }
 
 export function TeamManagement({ userRole }: TeamManagementProps) {
+  // 관리자라면 이 페이지 대신 사용자 관리로 이동
+  useEffect(() => {
+    if (userRole === "admin") {
+      window.location.assign("/admin/users");
+    }
+  }, [userRole]);
+
+  if (userRole === "admin") {
+    // 혹시 브라우저가 막히는 경우를 대비해 버튼도 제공
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">팀 관리</h1>
+            <p className="text-muted-foreground">관리자는 사용자 관리 페이지로 이동합니다.</p>
+          </div>
+          <Button onClick={() => (window.location.href = "/admin/users")}>
+            사용자 관리로 이동
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const [q, setQ] = useState("");
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +55,24 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     (async () => {
       try {
         setLoading(true);
-        const data = await listTeams();
+        let data: TeamListDto[] = [];
+        if (userRole === "professor") {
+          // 교수: 담당 프로젝트의 팀
+          data = await listTeachingTeams();
+          // 담당 프로젝트가 없고, 본인이 팀 멤버인 팀도 보고 싶다면 아래 주석 해제
+          // if (data.length === 0) data = await listTeams();
+        } else {
+          // 학생: 내가 속한 팀
+          data = await listTeams();
+        }
         setTeams(data ?? []);
+      } catch {
+        setTeams([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [userRole]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
@@ -70,11 +105,6 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
             <CalendarDays className="h-4 w-4 mr-1" /> 일정 관리
           </Button>
         </>
-      )}
-      {userRole === "admin" && (
-        <Button size="sm" variant="outline">
-          <Settings className="h-4 w-4 mr-1" /> 설정
-        </Button>
       )}
     </>
   );
