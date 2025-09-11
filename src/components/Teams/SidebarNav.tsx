@@ -26,8 +26,8 @@ export function SidebarNav({ activeView, setActiveView }: SidebarNavProps) {
                 <Users className="w-4 h-4 mr-2" /> 팀원 관리
             </Button>
             <Button
-                variant={'ghost'}
-                className={`${commonClasses} text-destructive hover:bg-destructive/10 hover:text-destructive mt-auto ${activeView === 'danger' ? 'bg-destructive/10' : ''}`}
+                variant={activeView === 'danger' ? 'secondary' : 'ghost'}
+                className={`${commonClasses} text-destructive hover:bg-destructive/10 hover:text-destructive mt-auto`}
                 onClick={() => setActiveView('danger')}
             >
                 <Trash2 className="w-4 h-4 mr-2" /> 팀 삭제

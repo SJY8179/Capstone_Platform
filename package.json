@@ -1,6 +1,7 @@
 {
       "name": "Capstone Project Management Platform",
       "version": "0.1.0",
+      "type": "module",
       "private": true,
       "dependencies": {
             "@radix-ui/react-accordion": "^1.2.3",
@@ -50,17 +51,20 @@
             "vaul": "^1.1.2"
       },
       "devDependencies": {
+            "@tailwindcss/vite": "^4.1.13",
             "@types/node": "^20.19.13",
             "@types/react": "^19.1.12",
             "@types/react-dom": "^19.1.9",
             "@vitejs/plugin-react": "^5.0.2",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "tailwindcss": "^4.1.13",
             "typescript": "^5.9.2",
             "vite": "^6.3.5"
       },
       "scripts": {
             "dev": "vite",
             "build": "vite build",
-            "preview": "vite preview"
+            "preview": "vite preview",
+            "tailwind:watch": "npx tailwindcss -i ./src/index.css -o ./src/output.css --watch"
       }
 }

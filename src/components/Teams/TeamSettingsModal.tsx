@@ -23,6 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Crown } from 'lucide-react';
 import { updateTeam, changeLeader, removeMember, deleteTeam } from '@/api/teams';
 import type { TeamListDto } from '@/types/domain';
@@ -133,7 +134,7 @@ export function TeamSettingsModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-3xl h-[70vh] flex flex-col p-0">
+            <DialogContent className="sm:max-w-xl h-[70vh] flex flex-col p-0">
                 <DialogHeader className="p-6 pb-4 border-b">
                     <DialogTitle>팀 설정: {team.name}</DialogTitle>
                     <DialogDescription>
@@ -183,20 +184,22 @@ export function TeamSettingsModal({
                                     </div>
                                     <div className="space-y-2">
                                         <Label>팀원 목록</Label>
-                                        <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-md p-2">
-                                            {team.members.filter(m => m.role !== 'leader').map(member => (
-                                                <div key={member.id} className="flex items-center justify-between p-2">
-                                                    <span>{member.name}</span>
-                                                    <Button size="sm" variant="destructive" onClick={() => handleRemoveMember(member.id, member.name)} disabled={isSubmitting}>삭제</Button>
-                                                </div>
-                                            ))}
-                                            {team.members.length === 1 && <p className="text-sm text-muted-foreground p-2">팀원이 없습니다.</p>}
-                                        </div>
+                                        <ScrollArea className="h-[200px] rounded-md border">
+                                            <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-md p-2">
+                                                {team.members.filter(m => m.role !== 'leader').map(member => (
+                                                    <div key={member.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
+                                                        <span>{member.name}</span>
+                                                        <Button size="sm" variant="destructive" onClick={() => handleRemoveMember(member.id, member.name)} disabled={isSubmitting}>삭제</Button>
+                                                    </div>
+                                                ))}
+                                                {team.members.length === 1 && <p className="text-sm text-muted-foreground p-2">팀원이 없습니다.</p>}
+                                            </div>
+                                        </ScrollArea>
                                     </div>
                                 </CardContent>
                             </Card>
                         )}
-                        
+
                         {/* 3. 팀 삭제 탭 */}
                         {activeView === 'danger' && (
                             <Card className="border-none shadow-none">

@@ -1,5 +1,4 @@
 ﻿@import "tailwindcss";
-@plugin "tailwindcss-animate";
 
 @layer properties {
   @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
@@ -4864,4 +4863,3 @@ html {
     opacity: 0;
   }
 }
-
