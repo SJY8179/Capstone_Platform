@@ -1,11 +1,15 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectCreateReq;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectUpdateReq;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -19,6 +23,7 @@ import java.util.Objects;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
@@ -30,6 +35,83 @@ public class ProjectService {
         return projectRepository.findAllWithTeam().stream()
                 .map(this::toListDto)
                 .toList();
+    }
+
+    @Transactional
+    public ProjectListDto createProject(UserAccount ua, ProjectCreateReq req) {
+        if (req.getTitle() == null || req.getTitle().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title은 필수입니다.");
+        }
+
+        Team team = null;
+        if (req.getTeamId() != null) {
+            team = teamRepository.findById(req.getTeamId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "팀을 찾을 수 없습니다."));
+            boolean isMember = safeIsMember(req.getTeamId(), ua.getId());
+            if (!isMember) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "팀 멤버만 프로젝트를 생성할 수 있습니다.");
+            }
+        }
+
+        Project p = new Project();
+        p.setTitle(req.getTitle());
+        // description, startDate, endDate는 현재 Project 엔티티에 없으므로 주석 처리
+        // p.setDescription(req.getDescription());
+        p.setTeam(team);
+        // p.setStartDate(req.getStartDate());
+        // p.setEndDate(req.getEndDate());
+        p.setStatus(Project.Status.ACTIVE);
+
+        Project saved = projectRepository.save(p);
+        return toListDto(saved);
+    }
+
+    @Transactional
+    public ProjectListDto updateProject(UserAccount ua, Long id, ProjectUpdateReq req) {
+        Project p = projectRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트를 찾을 수 없습니다."));
+
+        // 권한: 팀 프로젝트면 팀 멤버만 수정 가능(초기 스펙)
+        if (p.getTeam() != null) {
+            boolean isMember = safeIsMember(p.getTeam().getId(), ua.getId());
+            if (!isMember) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "팀 멤버만 수정할 수 있습니다.");
+            }
+        } else {
+            // 개인 프로젝트 정책을 쓸거면 여기에 소유자 체크 등 추가
+        }
+
+        if (req.getTitle() != null) p.setTitle(req.getTitle());
+        // description, startDate, endDate는 현재 Project 엔티티에 없으므로 주석 처리
+        // if (req.getDescription() != null) p.setDescription(req.getDescription());
+        // if (req.getStartDate() != null) p.setStartDate(req.getStartDate());
+        // if (req.getEndDate() != null) p.setEndDate(req.getEndDate());
+
+        Project saved = projectRepository.save(p);
+        return toListDto(saved);
+    }
+
+    @Transactional
+    public void deleteProject(UserAccount ua, Long id) {
+        Project p = projectRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트를 찾을 수 없습니다."));
+
+        if (p.getTeam() != null) {
+            boolean isMember = safeIsMember(p.getTeam().getId(), ua.getId());
+            if (!isMember) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "팀 멤버만 삭제할 수 있습니다.");
+            }
+            // 팀장만 삭제 등 추가 정책이 필요하면 TeamRole 체크 로직 추가
+        }
+        projectRepository.delete(p);
+    }
+
+    private boolean safeIsMember(Long teamId, Long userId) {
+        try {
+            return teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, userId);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "팀 멤버십 확인 중 오류", e);
+        }
     }
 
     private ProjectListDto toListDto(Project p) {
