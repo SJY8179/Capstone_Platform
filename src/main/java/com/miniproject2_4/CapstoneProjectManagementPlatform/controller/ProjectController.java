@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectDetailDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
@@ -31,6 +32,14 @@ public class ProjectController {
     public List<ProjectListDto> my(Authentication auth) {
         UserAccount ua = ensureUser(auth);
         return projectService.listProjectsForUser(ua);
+    }
+
+    /** 단건 상세: /api/projects/{id} */
+    @GetMapping("/projects/{id}")
+    @Transactional(readOnly = true)
+    public ProjectDetailDto getOne(@PathVariable Long id, Authentication auth) {
+        UserAccount ua = ensureUser(auth);
+        return projectService.getProjectDetail(id, ua);
     }
 
     /** (옵션) 교수 전용: 담당 프로젝트 목록 — 프론트 폴백에서 호출 가능 */

@@ -16,6 +16,16 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     """)
     List<Project> findAllWithTeam();
 
+    /** 상세 화면용: team/professor fetch-join */
+    @Query("""
+        select p
+          from Project p
+          left join fetch p.team t
+          left join fetch p.professor prof
+         where p.id = :id
+    """)
+    Optional<Project> findByIdWithTeamAndProfessor(@Param("id") Long id);
+
     /** 동일 팀의 여러 프로젝트 중 가장 최근 생성된 하나를 선택 */
     Optional<Project> findTopByTeam_IdOrderByCreatedAtDesc(Long teamId);
 
@@ -37,9 +47,9 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findAllByMemberUserId(@Param("userId") Long userId);
 
     /**
-     *    교수(담당자)로 지정된 프로젝트 (project.professor_id 사용)
-     *  - 팀 멤버 여부와 무관하게 교수 매핑으로 판단
-     *  - 팀을 fetch join하여 Lazy 문제 방지
+     * 교수(담당자)로 지정된 프로젝트 (project.professor_id 사용)
+     * - 팀 멤버 여부와 무관하게 교수 매핑으로 판단
+     * - 팀을 fetch join하여 Lazy 문제 방지
      */
     @Query("""
         select distinct p
