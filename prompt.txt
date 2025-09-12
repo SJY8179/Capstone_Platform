@@ -1,124 +1,150 @@
-너는 리포지토리의 백엔드(Spring Boot, Java 17) 코드를 정적 분석해서, 현재까지 구현된 기능과 아직 개발되지 않은 기능을 한눈에 보여주는 리포트를 작성한다. 코드는 수정하지 말고 읽기 전용 분석만 수행한다.
+Claude Code 작업 프롬프트 (붙여넣기용)
 
-분석 범위
+역할: 프런트엔드 리팩터/버그 헌터
+목표:
 
-우선순위 경로:
+프로젝트 생성 성공 시 모달을 닫는다.
 
-backend/src/main/java/**
+목록은 즉시 갱신된다(낙관적 추가 or invalidate).
 
-(있다면) backend/Capstone_Platform/src/main/java/**
+우측 상단 “새 프로젝트” 버튼은 항상 다시 동작한다(비활성/무응답 금지).
 
-제외: frontend/**, node_modules/**, dist/**, .vite/**
+“계속 생성하기” 체크박스는 제거한다.
 
-수행 절차
+해야 할 일
 
-컨트롤러/엔드포인트 수집
+코드 탐색
 
-@RestController/@Controller 클래스를 나열.
+frontend/src/components/Projects/CreateProjectModal.(tsx|jsx)
 
-각 클래스의 @RequestMapping, @GetMapping, @PostMapping, @PutMapping, @PatchMapping, @DeleteMapping를 파싱해서
+frontend/src/pages/Projects/ProjectManagement.(tsx|jsx) 또는 ProjectsPage
 
-HTTP 메서드 / 전체 경로 / 메서드명 / DTO(Req/Res) / 인증 필요 여부를 표로 정리.
+frontend/src/api/projects.(ts|js) (createProject 사용)
 
-명령:
+CreateProjectModal 수정
 
-grep -R --line-number --include=\*.java -E "@(RestController|Controller)|@RequestMapping|@GetMapping|@PostMapping|@PutMapping|@PatchMapping|@DeleteMapping" backend | sed -n '1,400p'
+“계속 생성하기” 관련 import/상태/UI 전부 삭제.
 
-도메인/서비스 계층 식별
+제출 흐름:
 
-entity, repository, service, dto 패키지의 클래스 목록과 상호참조(예: Service→Repository 호출).
+try {
+  setIsSubmitting(true);
+  const created = await createProject(payload);
+  toast.success('프로젝트가 생성되었습니다.');
+  onCreateSuccess?.(created);   // 리스트 갱신
+  onClose();                    // ✅ 성공 시 모달 닫기
+  resetForm();                  // 닫기 직전/직후 폼 초기화(잔상 방지)
+} catch (e) {
+  toast.error('생성에 실패했습니다.');
+} finally {
+  setIsSubmitting(false);       // 제출 버튼만 비활성 → 복구
+}
 
-명령:
 
-find backend -type f -name "*.java" | wc -l
+모달 언마운트/닫힘 시 isSubmitting=false 보장하는 cleanup 추가.
 
-grep -R --line-number --include=\*.java -E "package .*\\.(entity|repository|service|dto)" backend | sed -n '1,400p'
+ESC/바깥 클릭/“취소”로 정상 종료 유지.
 
-보안/인증 흐름 확인
+ProjectManagement(또는 ProjectsPage) 수정
 
-SecurityConfig, Jwt*, User*Details*, Auth*Controller 등 존재 여부 및 필터 체인/허용 url 확인.
+트리거 버튼:
 
-로그인/로그아웃/회원가입 엔드포인트가 실제로 있는지 맵핑 경로와 함께 증거 제시.
+<Button onClick={handleOpenCreateModal}>+ 새 프로젝트</Button>
 
-명령:
 
-grep -R --line-number --include=\*.java -E "SecurityConfig|OncePerRequestFilter|Jwt|UserDetailsService|PasswordEncoder|/login|/logout|/signup|/register" backend | sed -n '1,400p'
+절대 disabled, aria-disabled, pointer-events-none 등을 영구적으로 주지 말 것.
 
-팀 기능 확인
+성공 콜백:
 
-팀 생성/삭제/수정/팀원 관리/팀 초대 관련 컨트롤러·서비스·엔티티를 추적해서, 어떤 기능이 구현됨인지 엔드포인트와 함께 정리.
+const handleCreateSuccess = (p: ProjectListDto) => {
+  setProjects(prev => [p, ...prev]); // 또는 query invalidate
+};
 
-명령:
 
-grep -R --line-number --include=\*.java -E "Team|TeamMember|invite|member|/api/team|/api/teams" backend | sed -n '1,400p'
+모달 사용:
 
-기능 매핑 & 공란(미구현) 탐지
+<CreateProjectModal
+  isOpen={isCreateModalOpen}
+  onClose={handleCloseCreateModal}
+  onCreateSuccess={handleCreateSuccess}
+/>
 
-아래 기능 목록을 기준으로 구현됨/미구현 여부를 분류한다. “구현됨”으로 표기할 때는 **근거(파일경로:줄, 엔드포인트)**를 함께 제시.
 
-인증: 로그인, 로그아웃, 회원가입
+백드롭/오버레이가 pointer-events를 막는 잔상 없도록 onOpenChange와 상태 정리 확인.
 
-팀: 팀 생성, 팀 초대, 팀원 관리, 팀 정보 수정, 팀 삭제
+불필요 요소 제거
 
-프로젝트: 프로젝트 생성/조회/수정/삭제
+체크박스 UI/상태/문구 삭제 및 관련 스타일/테스트 갱신.
 
-설정: 설정 페이지(백엔드 지원 엔드포인트)
+테스트 (React Testing Library)
 
-(옵션) 초기 제안서 기준: 일정 등록, 상태관리, 스레드 코멘트 & 멘션, 파일 보관함, 간단 위키, 권한 관리, GitHub 연동(Webhook)
+성공 플로우
 
-위 기능들에 대응하는 엔드포인트/서비스 메서드가 하나도 없으면 → 미구현으로 분류.
+“새 프로젝트” 클릭 → 모달 열림
 
-산출물(필수)
+값 입력 → “생성” → 201 모킹
 
-(A) 요약 문장 (원하는 형식)
+모달이 닫힌다.
 
-지금까지 개발된 기능 : ...
+목록에 새 카드가 보인다.
 
-아직 개발되지 않은 기능 : ...
+다시 “새 프로젝트” 클릭 → 모달이 정상 재오픈(버튼 안 죽음)
 
-(B) 엔드포인트 표
+실패 플로우
 
-컬럼: Feature | HTTP | Path | Controller#Method | Request DTO | Response DTO | Auth
+500 모킹 시 토스트 노출, 모달 유지, 제출 버튼만 재활성화
 
-(C) 도메인 표
+접근성/잔상
 
-Entity | Repository | Service | 주요 메서드
+모달 닫힌 뒤 화면 클릭 가능(백드롭 pointer-events 잔류 없음)
 
-(D) 백로그 제안
+수용 기준 (Acceptance Criteria)
 
-미구현 기능에 대해 구체적 다음 작업 항목(커밋 단위) 체크리스트 제시
+(A1) 생성 성공 시 모달은 항상 닫힌다.
 
-출력 형식 (예시)
+(A2) 목록은 즉시 갱신된다(낙관적 업데이트 또는 invalidate 후 재조회).
 
-간결 한국어 + 필요한 곳에 코드블록/표 활용
+(A3) “새 프로젝트” 버튼은 항상 재동작하며 비활성/무응답 상태로 남지 않는다.
 
-예)
+(A4) 체크박스 없이도 위 동작을 만족한다.
 
-지금까지 개발된 기능 : 로그인, 로그아웃, 회원가입, 팀 생성, 팀 초대, 팀원 관리, 팀 정보 수정, 팀 삭제
-아직 개발되지 않은 기능 : 프로젝트 생성, 설정 페이지, (옵션) 일정 등록, 상태관리, 스레드 코멘트 & 멘션, 파일 보관함, 간단 위키, 권한 관리, GitHub 연동
+(A5) 실패 시에도 트리거 버튼은 영향받지 않는다(모달 내부 제출 버튼만 상태 관리).
 
-[엔드포인트 요약]
-| Feature  | HTTP | Path                  | Controller#Method       | Req | Res | Auth |
-|----------|------|-----------------------|-------------------------|-----|-----|------|
-| 로그인   | POST | /api/auth/login       | AuthController.login    | ... | ... | ❌   |
-| 팀 생성  | POST | /api/teams            | TeamController.create   | ... | ... | ✅   |
-...
+출력 형식
 
-[도메인 요약]
-| Entity       | Repository               | Service        | 주요 메서드                      |
-|--------------|--------------------------|----------------|----------------------------------|
-| Team         | TeamRepository           | TeamService    | createTeam, inviteMember, ...    |
-...
+변경 파일별 diff 또는 신규 파일 전문
 
-[다음 작업 백로그]
-- [ ] 프로젝트 생성 API: POST /api/projects {name, ...} → ProjectService.create()
-- [ ] 설정 조회/수정 API: GET/PUT /api/settings → SettingsService
-...
+수정 포인트 근거(파일/라인/원인) 3줄 요약
 
-주의
+실행/테스트 방법(스크린샷/로그 가능)
 
-코드 변경 금지(분석만)
+참고 스니펫
+// CreateProjectModal.tsx (핵심)
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  try {
+    setIsSubmitting(true);
+    const created = await createProject(form);
+    toast.success('프로젝트가 생성되었습니다.');
+    onCreateSuccess?.(created); // 목록 갱신
+    onClose();                  // ✅ 성공 시 닫기
+    resetForm();
+  } catch (err) {
+    toast.error('생성에 실패했습니다.');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
-찾은 내용은 파일경로:라인번호와 함께 근거 제시
+// ProjectManagement.tsx (핵심)
+<Button onClick={handleOpenCreateModal}>
+  <Plus className="h-4 w-4 mr-2" /> 새 프로젝트
+</Button>
+<CreateProjectModal
+  isOpen={isCreateModalOpen}
+  onClose={handleCloseCreateModal}
+  onCreateSuccess={handleCreateSuccess}
+/>
 
-표/체크리스트는 백엔드 기준으로 작성
+
+이 지시에 따라 성공 시 모달 닫힘 + 트리거 상시 동작으로 고치고, 위 수용 기준과 테스트를 통과하는 변경사항을 출력해줘.

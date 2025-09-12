@@ -43,7 +43,8 @@ public class SecurityConfig {
                                 "/actuator/health/**",
                                 "/actuator/info/**",
                                 "/error",
-                                "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+                                "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
+                                "/projects/**", "/h2-console/**"  // 임시 테스트용
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/").permitAll()
                         .anyRequest().authenticated()

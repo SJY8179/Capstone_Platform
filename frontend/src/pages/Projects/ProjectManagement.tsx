@@ -14,6 +14,7 @@ import type { UserRole, User } from "@/types/user";
 import { listProjects } from "@/api/projects";
 import type { ProjectListDto, ProjectStatus } from "@/types/domain";
 import { useAuth } from "@/stores/auth";
+import { CreateProjectModal } from "@/components/Projects/CreateProjectModal";
 
 /** 상태 -> 라벨 매핑 */
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -49,19 +50,34 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   const [tab, setTab] = useState<ProjectStatus | "all">("all");
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      // 관리자면 전체(/projects), 그 외는 내 목록(/projects/my) + 필요 시 보강
+      const data = await listProjects({ isAdmin });
+      setProjects(data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        // 관리자면 전체(/projects), 그 외는 내 목록(/projects/my) + 필요 시 보강
-        const data = await listProjects({ isAdmin });
-        setProjects(data ?? []);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchProjects();
   }, [isAdmin]);
+
+  const handleCreateSuccess = (newProject: ProjectListDto) => {
+    setProjects(prev => [newProject, ...prev]);
+  };
+
+  const handleOpenCreateModal = () => {
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false);
+  };
 
   /** 탭/검색 2차 필터 + 최근 업데이트 정렬 */
   const filtered = useMemo(() => {
@@ -136,7 +152,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </p>
         </div>
         {userRole === "student" && (
-          <Button>
+          <Button onClick={handleOpenCreateModal}>
             <Plus className="h-4 w-4 mr-2" />
             새 프로젝트
           </Button>
@@ -247,13 +263,31 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             })}
 
             {!loading && filtered.length === 0 && (
-              <div className="text-center text-muted-foreground py-12">
-                표시할 프로젝트가 없습니다.
+              <div className="text-center py-12">
+                <div className="text-muted-foreground mb-4">
+                  {searchQuery || tab !== "all" 
+                    ? "조건에 맞는 프로젝트가 없습니다."
+                    : "아직 프로젝트가 없습니다."
+                  }
+                </div>
+                {userRole === "student" && !searchQuery && tab === "all" && (
+                  <Button onClick={handleOpenCreateModal} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    새 프로젝트를 만들어 보세요
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* 프로젝트 생성 모달 */}
+      <CreateProjectModal
+        isOpen={isCreateModalOpen}
+        onClose={handleCloseCreateModal}
+        onCreateSuccess={handleCreateSuccess}
+      />
     </div>
   );
 }
