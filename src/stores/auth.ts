@@ -18,13 +18,8 @@ class AuthStore {
   private normalizeRole(role: unknown): UserRole {
     const r = String(role ?? "").toLowerCase();
     if (r === "student" || r === "professor" || r === "admin") return r as UserRole;
-    // 백엔드가 "STUDENT/PROFESSOR/ADMIN"을 내려도 커버됨
-    if (r === "student".toUpperCase().toLowerCase()) return "student";
-    return r === "professor".toUpperCase().toLowerCase()
-      ? "professor"
-      : r === "admin".toUpperCase().toLowerCase()
-      ? "admin"
-      : "student"; // 안전한 기본값
+    // 모호/누락 시 안전 기본값
+    return "student";
   }
 
   private toUser(raw: any): User {
@@ -45,7 +40,7 @@ class AuthStore {
       localStorage.setItem("refreshToken", data.refreshToken);
       const user = this.toUser(data.user);
       this.set({ user, loading: false });
-      appBus.emitAuthChanged?.();
+      appBus.emitAuthChanged();
       return user;
     } finally {
       this.set({ loading: false });
@@ -68,7 +63,7 @@ class AuthStore {
       const { data } = await http.get("/auth/me");
       const user = this.toUser(data);
       this.set({ user });
-      appBus.emitAuthChanged?.();
+      appBus.emitAuthChanged();
       return user;
     } catch {
       return null;
@@ -87,7 +82,7 @@ class AuthStore {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     this.set({ user: null });
-    appBus.emitAuthChanged?.();
+    appBus.emitAuthChanged();
   }
 }
 
@@ -96,6 +91,7 @@ export const authStore = new AuthStore();
 /** 전역 인증 상태 구독 훅 */
 const subscribe = (onChange: () => void) => {
   try {
+    // onAuthChanged 지원 시 우선 사용
     // @ts-ignore
     if (typeof appBus.onAuthChanged === "function") {
       // @ts-ignore
@@ -108,6 +104,7 @@ const subscribe = (onChange: () => void) => {
         } catch {}
       };
     }
+    // 이벤트 버스 일반 on/off
     // @ts-ignore
     if (typeof appBus.on === "function") {
       // @ts-ignore

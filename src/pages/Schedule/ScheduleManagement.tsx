@@ -1,5 +1,4 @@
-﻿// src/pages/Schedule/ScheduleManagement.tsx
-import { useEffect, useMemo, useState, useCallback } from "react";
+﻿import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,6 @@ import type { UserRole } from "@/types/user";
 import {
   listSchedulesInRange,
   invalidateSchedulesCache,
-  probeScheduleAccess,
 } from "@/api/schedules";
 import type { ScheduleDto, ScheduleType, EventType } from "@/types/domain";
 import { EventEditor } from "@/components/Schedule/EventEditor";
@@ -34,24 +32,12 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { accessErrorMessage, getApiError, isAccessError } from "@/api/http";
-import { listProjects } from "@/api/projects";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useAuth } from "@/stores/auth";
-import { getProfessorSummary } from "@/api/dashboard";
 
 export interface ScheduleManagementProps {
   userRole: UserRole;
-  projectId?: number; // 있더라도 교수/관리자에겐 초기 선택값으로만 사용
+  /** 헤더에서 선택된 프로젝트 ID */
+  projectId?: number;
 }
-
-type ProjectOption = { id: number; name: string; members?: any[] };
 
 function toYMD(d: Date) {
   const x = new Date(d);
@@ -90,21 +76,11 @@ export function ScheduleManagement({
   userRole,
   projectId,
 }: ScheduleManagementProps) {
-  const { user } = useAuth();
-
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] =
     useState<"upcoming" | "all" | "past">("upcoming");
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // 교수/관리자는 항상 프로젝트 전환 가능
-  const canSwitchProject = userRole === "admin" || userRole === "professor";
-
-  // 드롭다운에 넣을 프로젝트 목록
-  const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
-  // 선택된 프로젝트 (문자열 상태)
-  const [pickedProjectId, setPickedProjectId] = useState<string>("");
 
   // editor modal
   const [editorOpen, setEditorOpen] = useState(false);
@@ -113,13 +89,8 @@ export function ScheduleManagement({
   // 프로젝트 필요 안내 모달
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
-  // 최종 사용할 프로젝트 ID: picked > prop(projectId)
-  const resolvedProjectId = useMemo<number | undefined>(() => {
-    const n = Number(pickedProjectId);
-    if (Number.isFinite(n) && n > 0) return n;
-    if (projectId) return projectId;
-    return undefined;
-  }, [pickedProjectId, projectId]);
+  // 헤더에서 넘어온 프로젝트 ID만 사용
+  const resolvedProjectId = projectId;
 
   // 탭에 따라 조회 기간 설정
   const range = useMemo(() => {
@@ -140,104 +111,14 @@ export function ScheduleManagement({
     }
   }, [selectedTab]);
 
-  // --- 학생만 권한 프로브 사용 ---
-  const shouldProbe = userRole === "student";
-
-  // 드롭다운을 보여줄지 여부: 교수/관리자 true, 학생은 projectId가 없을 때만
-  const showProjectPicker = canSwitchProject || !projectId;
-
-  // 프로젝트 옵션 로더(안전 폴백 + **학생만** 권한 프로브)
-  useEffect(() => {
-    if (!showProjectPicker) return;
-
-    const normalize = (arr: any[] | undefined): ProjectOption[] =>
-      (arr ?? []).map((p: any) => ({
-        id: p.id,
-        name: p.name ?? p.title ?? `프로젝트 #${p.id}`,
-        members: Array.isArray(p.members) ? p.members : [],
-      }));
-
-    (async () => {
-      try {
-        // 1) 기본 목록 (관리자는 전체, 그 외는 my)
-        let base = normalize(await listProjects({ isAdmin: userRole === "admin" }));
-
-        // 학생이면 내가 속한 프로젝트만 필터(멤버십 기준)
-        if (userRole === "student") {
-          const myId = user?.id ? String(user.id) : undefined;
-          const myEmail = user?.email?.toLowerCase();
-          const myName = user?.name;
-          base = base.filter((p) =>
-            (p.members ?? []).some(
-              (m: any) =>
-                (myId && m?.id != null && String(m.id) === myId) ||
-                (myEmail && m?.email && String(m.email).toLowerCase() === myEmail) ||
-                (myName && m?.name && String(m.name) === myName)
-            )
-          );
-        }
-
-        // 2) 폴백: 교수/관리자이고 기본 목록이 비면 교수 대시보드 요약에서 추출
-        if ((userRole === "admin" || userRole === "professor") && base.length === 0) {
-          try {
-            const sum = await getProfessorSummary();
-            const map = new Map<number, string>();
-
-            sum.topTeams?.forEach?.((t: any) =>
-              map.set(t.projectId, t.projectName ?? `프로젝트 #${t.projectId}`)
-            );
-            sum.recentSubmissions?.forEach?.((s: any) =>
-              map.set(s.projectId, s.projectName ?? `프로젝트 #${s.projectId}`)
-            );
-            sum.pendingReviews?.forEach?.((r: any) =>
-              map.set(r.projectId, r.projectName ?? `프로젝트 #${r.projectId}`)
-            );
-
-            base = Array.from(map, ([id, name]) => ({ id, name }));
-          } catch {
-            // 요약 API가 없거나 권한이 없으면 무시
-          }
-        }
-
-        // 3) **학생만** 접근권한 프로브로 최종 필터링
-        let finalOptions: ProjectOption[] = base;
-        if (shouldProbe) {
-          const probed = await Promise.allSettled(
-            base.map(async (p) => ({
-              p,
-              ok: await probeScheduleAccess(p.id).catch(() => false),
-            }))
-          );
-          finalOptions = probed
-            .map((r) => (r.status === "fulfilled" ? r.value : null))
-            .filter(Boolean)
-            .filter((v: any) => v.ok)
-            .map((v: any) => v.p as ProjectOption);
-        }
-
-        setProjectOptions(finalOptions);
-
-        // 기본 선택 자동 지정(이전에 선택한 값이 없다면): prop(projectId) 우선
-        if (!pickedProjectId) {
-          if (projectId) {
-            setPickedProjectId(String(projectId));
-          } else if (finalOptions.length > 0) {
-            setPickedProjectId(String(finalOptions[0].id));
-          }
-        }
-      } catch (e) {
-        console.error(e);
-        setProjectOptions([]);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showProjectPicker, userRole, user?.id, user?.email, user?.name, shouldProbe, projectId]);
-
+  // 요청 경합 방지용 가드
+  const reqIdRef = useRef(0);
   const refresh = useCallback(async () => {
+    const thisReq = ++reqIdRef.current;
     setLoading(true);
     try {
       if (!resolvedProjectId) {
-        setSchedules([]);
+        if (thisReq === reqIdRef.current) setSchedules([]);
         return;
       }
       const rows = await listSchedulesInRange({
@@ -245,13 +126,12 @@ export function ScheduleManagement({
         to: range.to,
         projectId: resolvedProjectId,
       });
-      setSchedules(rows);
+      if (thisReq === reqIdRef.current) setSchedules(rows);
     } catch (error) {
-      // 여기로 거의 안 들어오지만(위에서 401/403을 빈 배열로 처리)
       console.error("Failed to fetch schedules:", error);
-      setSchedules([]); // 조용히 비움
+      if (thisReq === reqIdRef.current) setSchedules([]);
     } finally {
-      setLoading(false);
+      if (thisReq === reqIdRef.current) setLoading(false);
     }
   }, [range.from, range.to, resolvedProjectId]);
 
@@ -316,7 +196,7 @@ export function ScheduleManagement({
 
   const onCreateClick = () => {
     if (!resolvedProjectId) {
-      toast.info("프로젝트를 먼저 선택하세요.");
+      toast.info("상단 헤더에서 프로젝트를 먼저 선택하세요.");
       setNeedProjectOpen(true);
       return;
     }
@@ -372,57 +252,10 @@ export function ScheduleManagement({
           </p>
         </div>
 
-        {/* 프로젝트 선택 (교수/관리자는 항상 노출, 학생은 projectId 없을 때만) */}
-        {showProjectPicker ? (
-          <div className="flex items-end gap-2">
-            <div className="grid gap-1">
-              <Label className="text-xs">프로젝트</Label>
-              <Select
-                value={pickedProjectId}
-                onValueChange={async (v) => {
-                  setPickedProjectId(v);
-                  if (shouldProbe) {
-                    // 학생만 선택 시 권한 재확인
-                    const ok = await probeScheduleAccess(Number(v)).catch(() => false);
-                    if (!ok) {
-                      toast.error("이 프로젝트에 접근 권한이 없습니다.");
-                      setSchedules([]);
-                      return;
-                    }
-                  }
-                  setTimeout(() => refresh(), 0);
-                }}
-              >
-                <SelectTrigger className="w-[240px]">
-                  <SelectValue
-                    placeholder={
-                      projectOptions.length
-                        ? "프로젝트 선택"
-                        : "표시할 프로젝트가 없습니다."
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {projectOptions.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button onClick={onCreateClick}>
-              <Plus className="h-4 w-4 mr-2" />
-              새 일정 추가
-            </Button>
-          </div>
-        ) : (
-          <Button onClick={onCreateClick}>
-            <Plus className="h-4 w-4 mr-2" />
-            새 일정 추가
-          </Button>
-        )}
+        <Button onClick={onCreateClick} disabled={!projectId} title={!projectId ? "상단에서 프로젝트를 선택하세요" : undefined}>
+          <Plus className="h-4 w-4 mr-2" />
+          새 일정 추가
+        </Button>
       </div>
 
       {/* 검색 */}
@@ -520,7 +353,7 @@ export function ScheduleManagement({
               <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
                 {!resolvedProjectId
-                  ? "오른쪽 상단에서 프로젝트를 선택해 주세요."
+                  ? "상단 헤더에서 프로젝트를 선택해 주세요."
                   : selectedTab === "upcoming"
                     ? "다가오는 일정이 없습니다."
                     : selectedTab === "past"
@@ -541,14 +374,14 @@ export function ScheduleManagement({
           initial={
             editing
               ? {
-                  id: parseEventId(editing.id) ?? undefined,
-                  title: editing.title ?? "",
-                  date: editing.date ?? "",
-                  startTime: editing.time ?? "",
-                  endTime: editing.endTime ?? "",
-                  type: scheduleTypeToEventType(editing.type),
-                  location: editing.location ?? "",
-                }
+                id: parseEventId(editing.id) ?? undefined,
+                title: editing.title ?? "",
+                date: editing.date ?? "",
+                startTime: editing.time ?? "",
+                endTime: editing.endTime ?? "",
+                type: scheduleTypeToEventType(editing.type),
+                location: editing.location ?? "",
+              }
               : undefined
           }
           onSaved={async () => {
@@ -567,8 +400,7 @@ export function ScheduleManagement({
             <DialogHeader>
               <DialogTitle>프로젝트 선택이 필요합니다</DialogTitle>
               <DialogDescription>
-                일정을 추가하려면 먼저 상단에서 프로젝트를 선택하거나 프로젝트에
-                참여하세요.
+                상단 헤더의 프로젝트 선택 상자에서 프로젝트를 먼저 선택하세요.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

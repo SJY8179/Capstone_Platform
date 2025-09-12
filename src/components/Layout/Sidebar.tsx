@@ -65,7 +65,7 @@ export function Sidebar({
     const common = [
       { id: "dashboard" as ActivePage, label: "대시보드", icon: Home },
       { id: "projects" as ActivePage, label: "프로젝트", icon: FolderOpen },
-      { id: "assignments" as ActivePage, label: "과제", icon: ListChecks }, // ✅ 추가
+      { id: "assignments" as ActivePage, label: "과제", icon: ListChecks },
     ];
     const student = [
       ...common,
@@ -79,7 +79,8 @@ export function Sidebar({
     const admin = [
       ...common,
       { id: "users" as ActivePage, label: "사용자 관리", icon: UserCog },
-      { id: "evaluation" as ActivePage, label: "평가 시스템", icon: ClipboardCheck },
+      // ✅ 용어 통일: “평가 관리”
+      { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
     ];
     switch (userRole) {
       case "student": return student;

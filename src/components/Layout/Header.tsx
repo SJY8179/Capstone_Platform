@@ -1,18 +1,17 @@
 ﻿import React from "react";
-// --- 업데이트된 부분 시작 ---
-import { Bell, Search, User as UserIcon, LogOut } from "lucide-react"; // 1. LogOut 아이콘 추가
+import { Bell, Search, User as UserIcon, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu"; // 2. DropdownMenu 관련 컴포넌트 추가
-// --- 업데이트된 부분 끝 ---
+} from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
+import { ProjectSwitcher } from "@/components/Projects/ProjectSwitcher";
 
 interface AppUser {
   id: string;
@@ -20,34 +19,51 @@ interface AppUser {
   email: string;
   role: string;
   avatar?: string | null;
+  avatarUrl?: string | null;
 }
 
-// --- 업데이트된 부분 시작 ---
 interface HeaderProps {
   user: AppUser;
-  onLogout?: () => void; // 3. onLogout prop 추가
+  onLogout?: () => void;
+  /** 프로젝트 스위처 */
+  activeProjectId?: number | null;
+  onChangeActiveProject?: (id: number) => void;
 }
 
-export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop 받기
-  // --- 업데이트된 부분 끝 ---
-
+export function Header({
+  user,
+  onLogout,
+  activeProjectId,
+  onChangeActiveProject,
+}: HeaderProps) {
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
-      case "admin": return "destructive";
-      case "professor": return "default";
-      case "student": return "secondary";
-      default: return "outline";
+      case "admin":
+        return "destructive";
+      case "professor":
+        return "default";
+      case "student":
+        return "secondary";
+      default:
+        return "outline";
     }
   };
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case "admin": return "관리자";
-      case "professor": return "교수";
-      case "student": return "학생";
-      default: return role;
+      case "admin":
+        return "관리자";
+      case "professor":
+        return "교수";
+      case "student":
+        return "학생";
+      default:
+        return role;
     }
   };
+
+  const avatarSrc =
+    (user as any).avatarUrl ?? (user as any).avatar ?? undefined;
 
   return (
     <header className="h-16 border-b bg-background px-6 flex items-center justify-between">
@@ -59,6 +75,13 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
       </div>
 
       <div className="flex items-center gap-4">
+        {/* 프로젝트 스위처 (모바일에서도 표시) */}
+        <ProjectSwitcher
+          value={activeProjectId ?? undefined}
+          onChange={onChangeActiveProject}
+          isAdmin={user.role === "admin"}
+        />
+
         <Button variant="ghost" size="icon" className="relative" aria-label="알림">
           <Bell className="h-4 w-4" />
           <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-destructive text-[10px] leading-3 text-destructive-foreground flex items-center justify-center">
@@ -66,8 +89,6 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
           </span>
         </Button>
 
-        {/* --- 업데이트된 부분 시작 --- */}
-        {/* 5. 사용자 정보 영역을 DropdownMenu로 감싸기 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-3 h-auto p-1 rounded-full">
@@ -81,7 +102,7 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <Avatar>
-                <AvatarImage src={user.avatar || undefined} alt={user.name} />
+                <AvatarImage src={avatarSrc} alt={user.name} />
                 <AvatarFallback>
                   <UserIcon className="h-4 w-4" />
                 </AvatarFallback>
@@ -94,13 +115,15 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive cursor-pointer">
+            <DropdownMenuItem
+              onClick={onLogout}
+              className="text-destructive focus:text-destructive cursor-pointer"
+            >
               <LogOut className="mr-2 h-4 w-4" />
               <span>로그아웃</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        {/* --- 업데이트된 부분 끝 --- */}
       </div>
     </header>
   );

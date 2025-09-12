@@ -1,5 +1,4 @@
-﻿// 변경된 부분만 반영한 전체 교체본
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { LoginForm } from "@/components/Auth/LoginForm";
 import { Sidebar } from "@/components/Layout/Sidebar";
 import { Header } from "@/components/Layout/Header";
@@ -11,7 +10,7 @@ import { TeamManagement } from "@/pages/Teams/TeamManagement";
 import { EvaluationSystem } from "@/pages/Evaluation/EvaluationSystem";
 import { UserManagement } from "@/pages/Admin/UserManagement";
 import { ScheduleManagement } from "@/pages/Schedule/ScheduleManagement";
-import  ProjectAssignments from "@/pages/Projects/Assignments";
+import ProjectAssignments from "@/pages/Projects/Assignments";
 import { http } from "@/api/http";
 import { Toaster } from "@/components/ui/sonner";
 import type { User } from "@/types/user";
@@ -23,7 +22,7 @@ export type ActivePage =
   | "evaluation"
   | "users"
   | "schedule"
-  | "assignments"   // ✅ 추가
+  | "assignments"
   | "settings";
 
 export default function App() {
@@ -64,7 +63,6 @@ export default function App() {
         let list: any[] = [];
         let myApiSucceeded = false;
 
-        // 1) /projects/my가 있으면 결과 그대로 사용 (비어있어도 fallback 금지)
         try {
           const r = await http.get("/projects/my");
           myApiSucceeded = true;
@@ -73,7 +71,6 @@ export default function App() {
           if (err?.response?.status !== 404) throw err;
         }
 
-        // 2) /projects/my가 없을 때만 전체 목록으로 보조 선택
         if (!myApiSucceeded) {
           const r = await http.get("/projects");
           const raw = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.content ?? [];
@@ -125,8 +122,18 @@ export default function App() {
     );
   }
 
+  const NotAllowed = (
+    <div className="p-6">
+      <div className="rounded-xl border p-6">
+        <h2 className="text-lg font-semibold">권한이 없습니다</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          이 기능은 교수 또는 관리자만 사용할 수 있습니다.
+        </p>
+      </div>
+    </div>
+  );
+
   const renderMainContent = () => {
-    // ✅ 과제/평가는 프로젝트가 필요
     const needProject = activePage === "evaluation" || activePage === "assignments";
 
     if (needProject && !activeProjectId) {
@@ -156,19 +163,11 @@ export default function App() {
         return <TeamManagement userRole={currentUser.role} />;
 
       case "evaluation":
-        return (
-          <EvaluationSystem
-            userRole={currentUser.role}
-            projectId={activeProjectId!}
-          />
-        );
+        if (currentUser.role === "student") return NotAllowed;
+        return <EvaluationSystem userRole={currentUser.role} projectId={activeProjectId!} />;
 
       case "users":
-        return currentUser.role === "admin" ? (
-          <UserManagement />
-        ) : (
-          <div>권한이 없습니다.</div>
-        );
+        return currentUser.role === "admin" ? <UserManagement /> : <div>권한이 없습니다.</div>;
 
       case "schedule":
         return (
@@ -178,7 +177,7 @@ export default function App() {
           />
         );
 
-      case "assignments":   // ✅ 과제 페이지 렌더
+      case "assignments":
         return <ProjectAssignments projectId={activeProjectId!} />;
 
       default:
@@ -197,7 +196,12 @@ export default function App() {
         projectId={activeProjectId ?? undefined}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header user={currentUser} onLogout={handleLogout} />
+        <Header
+          user={currentUser}
+          onLogout={handleLogout}
+          activeProjectId={activeProjectId}
+          onChangeActiveProject={setActiveProjectId}
+        />
         <main className="flex-1 overflow-auto p-6">{renderMainContent()}</main>
       </div>
       <Toaster />
