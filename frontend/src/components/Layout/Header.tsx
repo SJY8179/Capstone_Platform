@@ -1,18 +1,19 @@
-﻿import React from "react";
-// --- 업데이트된 부분 시작 ---
-import { Bell, Search, User as UserIcon, LogOut } from "lucide-react"; // 1. LogOut 아이콘 추가
+import React, { useState } from "react";
+import { Bell, Search, User as UserIcon, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu"; // 2. DropdownMenu 관련 컴포넌트 추가
-// --- 업데이트된 부분 끝 ---
+} from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
+import { NotificationDropdown } from '../Notifications/NotificationDropdown';
+import { Notification } from '../Notifications/NotificationCenter';
+
 
 interface AppUser {
   id: string;
@@ -22,14 +23,61 @@ interface AppUser {
   avatar?: string | null;
 }
 
-// --- 업데이트된 부분 시작 ---
 interface HeaderProps {
   user: AppUser;
-  onLogout?: () => void; // 3. onLogout prop 추가
+  onLogout?: () => void;
+  onNotificationClick?: () => void;
 }
 
-export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop 받기
-  // --- 업데이트된 부분 끝 ---
+// 데모 알림 데이터
+const demoNotifications: Notification[] = [
+  {
+    id: '1',
+    type: 'commit',
+    title: '새로운 커밋이 푸시되었습니다',
+    message: '김철수님이 "프론트엔드 로그인 기능 구현"을 커밋했습니다.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 30),
+    read: false,
+    priority: 'medium',
+    author: { name: '김철수' }
+  },
+  {
+    id: '2',
+    type: 'feedback',
+    title: '새로운 피드백이 도착했습니다',
+    message: '박교수님이 중간 발표 자료에 피드백을 남겼습니다.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
+    read: false,
+    priority: 'high',
+    author: { name: '박교수' }
+  },
+  {
+    id: '3',
+    type: 'schedule',
+    title: '오늘 일정 알림',
+    message: '오후 2시: 팀 미팅, 오후 4시: 멘토링 세션이 예정되어 있습니다.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3),
+    read: true,
+    priority: 'medium'
+  }
+];
+
+export function Header({ user, onLogout, onNotificationClick }: HeaderProps) {
+  const [notifications, setNotifications] = useState<Notification[]>(demoNotifications);
+
+  const handleMarkAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(notif =>
+        notif.id === id ? { ...notif, read: true } : notif
+      )
+    );
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev =>
+      prev.map(notif => ({ ...notif, read: true }))
+    );
+  };
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -59,15 +107,13 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
       </div>
 
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative" aria-label="알림">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-destructive text-[10px] leading-3 text-destructive-foreground flex items-center justify-center">
-            3
-          </span>
-        </Button>
+        <NotificationDropdown
+          notifications={notifications}
+          onMarkAsRead={handleMarkAsRead}
+          onMarkAllAsRead={handleMarkAllAsRead}
+          onNotificationClick={onNotificationClick}
+        />
 
-        {/* --- 업데이트된 부분 시작 --- */}
-        {/* 5. 사용자 정보 영역을 DropdownMenu로 감싸기 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-3 h-auto p-1 rounded-full">
@@ -100,7 +146,6 @@ export function Header({ user, onLogout }: HeaderProps) { // 4. onLogout prop �
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        {/* --- 업데이트된 부분 끝 --- */}
       </div>
     </header>
   );

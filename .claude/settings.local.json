@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(if [ -d \"frontend/dist\" ])",
+      "Bash(then mkdir -p .trash/20250912_1329/frontend)",
+      "Bash(if [ -f \"frontend/src/output.css\" ])",
+      "Bash(then mkdir -p .trash/20250912_1329/frontend/src)",
+      "Bash(if [ -f \"backend/logs/spring.log\" ])",
+      "Bash(then mkdir -p .trash/20250912_1329/backend/logs)",
+      "Bash(if [ -f \"fi\" ])",
+      "Bash(then mv fi .trash/20250912_1329/)",
+      "Bash(npm i)",
+      "Bash(npm run build:*)",
+      "Bash(git worktree:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
