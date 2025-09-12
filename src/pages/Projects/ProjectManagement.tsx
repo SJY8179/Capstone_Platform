@@ -14,8 +14,6 @@ import type { UserRole, User } from "@/types/user";
 import { listProjects } from "@/api/projects";
 import type { ProjectListDto, ProjectStatus } from "@/types/domain";
 import { useAuth } from "@/stores/auth";
-
-/* ▶ 추가 */
 import {
   Dialog,
   DialogContent,
@@ -24,6 +22,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
+import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
 
 /** 상태 -> 라벨 매핑 */
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -62,15 +61,18 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /* ▶ 추가: 피드백 모달 상태 */
+  // 피드백 모달
   const [feedbackProjectId, setFeedbackProjectId] = useState<number | null>(null);
   const closeFeedback = () => setFeedbackProjectId(null);
+
+  // 상세(열람) 모달
+  const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
+  const closeDetail = () => setDetailProjectId(null);
 
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        // 관리자면 전체(/projects), 그 외는 내 목록(/projects/my) + 필요 시 보강
         const data = await listProjects({ isAdmin });
         setProjects(data ?? []);
       } finally {
@@ -112,19 +114,13 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <GitBranch className="h-4 w-4 mr-1" />
             GitHub
           </Button>
-          {/* 학생도 피드백 열람이 필요하면 주석 해제
-          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
-            <MessageSquare className="h-4 w-4 mr-1" />
-            피드백
-          </Button>
-          */}
         </div>
       );
     }
     if (userRole === "professor") {
       return (
         <div className="flex gap-2">
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
             <Eye className="h-4 w-4 mr-1" />
             열람
           </Button>
@@ -142,11 +138,14 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     // admin
     return (
       <div className="flex gap-2">
+        <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
+          <Eye className="h-4 w-4 mr-1" />
+          열람
+        </Button>
         <Button size="sm" variant="outline">
           <Edit className="h-4 w-4 mr-1" />
           편집
         </Button>
-        {/* 관리자도 피드백 관리 가능 */}
         <Button
           size="sm"
           variant="outline"
@@ -203,7 +202,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <TabsTrigger value="in-progress">진행중</TabsTrigger>
           <TabsTrigger value="review">검토중</TabsTrigger>
           <TabsTrigger value="completed">완료</TabsTrigger>
-          {/* 필요하면 <TabsTrigger value="planning">기획</TabsTrigger> 추가 */}
         </TabsList>
 
         <TabsContent value={tab} className="mt-6">
@@ -218,7 +216,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
               return (
                 <Card key={p.id}>
-                  {/* 상단: 제목 / 상태 / 설명 / 소속팀·업데이트 / 우측 액션 */}
+                  {/* 상단 */}
                   <CardHeader className="flex-row items-start justify-between space-y-0">
                     <div className="space-y-1">
                       <CardTitle className="flex items-center gap-2">
@@ -291,23 +289,45 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         </TabsContent>
       </Tabs>
 
-      {/* ▶ 추가: 피드백 모달 */}
+      {/* 피드백 모달 — 너비는 유지, 높이 제한 + 다이얼로그 자체 스크롤 */}
       <Dialog open={feedbackProjectId != null} onOpenChange={(o) => !o && closeFeedback()}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl w-[92vw] max-h-[85vh] overflow-y-auto p-0">
+          {/* 헤더는 스크롤 중에도 보이도록 고정 */}
+          <DialogHeader className="sticky top-0 z-10 bg-background p-6 pb-4 border-b">
             <DialogTitle>프로젝트 피드백</DialogTitle>
             <DialogDescription className="sr-only">
               이 대화 상자에서는 프로젝트의 피드백을 조회하고, 권한이 있으면 작성/수정/삭제할 수 있습니다.
             </DialogDescription>
           </DialogHeader>
 
-          {feedbackProjectId != null && (
-            <FeedbackPanel
-              projectId={feedbackProjectId}
-              canWrite={canWriteFeedback}
-              initialLimit={10}
-            />
-          )}
+          <div className="p-6 pt-4">
+            {feedbackProjectId != null && (
+              <FeedbackPanel
+                projectId={feedbackProjectId}
+                canWrite={canWriteFeedback}
+                initialLimit={10}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 상세(열람) 모달 — 다이얼로그 자체 스크롤 */}
+      <Dialog open={detailProjectId != null} onOpenChange={(o) => !o && closeDetail()}>
+        <DialogContent
+          style={{ maxWidth: "none", width: "96vw", maxHeight: "92vh" }}
+          className="sm:max-w-none overflow-y-auto p-0"
+        >
+          <DialogHeader className="sticky top-0 z-10 bg-background p-6 pb-4 border-b">
+            <DialogTitle>프로젝트 상세</DialogTitle>
+            <DialogDescription className="sr-only">
+              프로젝트의 세부 작업 현황, 진행률, 일정, 링크를 확인합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-6 pt-4">
+            {detailProjectId != null && <ProjectDetailPanel projectId={detailProjectId} />}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

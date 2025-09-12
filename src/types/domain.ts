@@ -14,6 +14,23 @@ export interface ProjectListDto {
   nextDeadline: { task: string; date: string } | null;
 }
 
+/** 상세 보기 DTO (백엔드 ProjectDetailDto와 1:1) */
+export interface ProjectDetailDto {
+  id: number;
+  title: string;
+  status: ProjectStatus;
+  team: { id: number | null; name: string };
+  professor: { id: number; name: string; email: string } | null;
+  repo?: { owner?: string | null; name?: string | null; url?: string | null } | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  progress: number; // 0~100
+  taskSummary: { total: number; completed: number; ongoing: number; pending: number };
+  tasks: { id: number; title: string; status: "completed" | "ongoing" | "pending"; dueDate?: string | null }[];
+  upcomingEvents: { id: number; title: string; type: EventType | string; startAt?: string | null; endAt?: string | null; location?: string | null }[];
+  links: { label: string; url: string }[];
+}
+
 /** 공통: 커서 페이지 응답 */
 export interface CursorPage<T> {
   items: T[];

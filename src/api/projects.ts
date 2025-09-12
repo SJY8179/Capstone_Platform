@@ -1,5 +1,5 @@
 ﻿import { http } from "@/api/http";
-import type { ProjectListDto, ProjectStatus } from "@/types/domain";
+import type { ProjectListDto, ProjectStatus, ProjectDetailDto } from "@/types/domain";
 
 /** 상태 문자열을 우리 타입으로 통일 */
 function normalizeStatus(raw: any): ProjectStatus {
@@ -78,7 +78,7 @@ function normalizeNextDeadline(raw: any): { task: string; date: string } | null 
   return null;
 }
 
-/** 프로젝트 1개 정규화 */
+/** 프로젝트 1개 정규화 (목록) */
 function normalizeProject(raw: any): ProjectListDto {
   const teamName =
     asString(
@@ -167,6 +167,63 @@ function normalizeProject(raw: any): ProjectListDto {
   };
 }
 
+/** 상세 응답 정규화 */
+function normalizeProjectDetail(raw: any): ProjectDetailDto {
+  const status = normalizeStatus(raw?.status ? { status: raw.status } : raw);
+  const repo =
+    raw?.repo ?? (raw?.repoOwner || raw?.githubRepo
+      ? { owner: raw?.repoOwner ?? null, name: raw?.githubRepo ?? null, url: raw?.repoOwner && raw?.githubRepo ? `https://github.com/${raw.repoOwner}/${raw.githubRepo}` : null }
+      : null);
+
+  return {
+    id: asNumber(raw?.id),
+    title: asString(raw?.title ?? raw?.name ?? "프로젝트"),
+    status,
+    team: {
+      id: raw?.team?.id ?? null,
+      name: raw?.team?.name ?? "N/A",
+    },
+    professor: raw?.professor
+      ? {
+          id: asNumber(raw.professor.id),
+          name: asString(raw.professor.name),
+          email: asString(raw.professor.email),
+        }
+      : null,
+    repo,
+    createdAt: raw?.createdAt ?? null,
+    updatedAt: raw?.updatedAt ?? null,
+    progress: asNumber(raw?.progress ?? 0),
+    taskSummary: {
+      total: asNumber(raw?.taskSummary?.total ?? 0),
+      completed: asNumber(raw?.taskSummary?.completed ?? 0),
+      ongoing: asNumber(raw?.taskSummary?.ongoing ?? 0),
+      pending: asNumber(raw?.taskSummary?.pending ?? 0),
+    },
+    tasks: Array.isArray(raw?.tasks)
+      ? raw.tasks.map((t: any) => ({
+          id: asNumber(t?.id),
+          title: asString(t?.title),
+          status: (t?.status as "completed" | "ongoing" | "pending") ?? "pending",
+          dueDate: t?.dueDate ?? null,
+        }))
+      : [],
+    upcomingEvents: Array.isArray(raw?.upcomingEvents)
+      ? raw.upcomingEvents.map((e: any) => ({
+          id: asNumber(e?.id),
+          title: asString(e?.title),
+          type: asString(e?.type ?? "ETC") as any,
+          startAt: e?.startAt ?? null,
+          endAt: e?.endAt ?? null,
+          location: e?.location ?? null,
+        }))
+      : [],
+    links: Array.isArray(raw?.links)
+      ? raw.links.map((l: any) => ({ label: asString(l?.label), url: asString(l?.url) }))
+      : [],
+  };
+}
+
 /** 응답 루트에서 리스트 꺼내기 */
 function normalizeListPayload(payload: any): any[] {
   if (Array.isArray(payload)) return payload;
@@ -185,7 +242,7 @@ function normalizeListPayload(payload: any): any[] {
     "projectList",
   ];
   for (const k of arrayKeys) {
-    const v = payload?.[k];
+    const v = (payload as any)?.[k];
     if (Array.isArray(v)) return v;
   }
 
@@ -233,10 +290,7 @@ export async function listProjectsAll(): Promise<ProjectListDto[]> {
   return rows.map((r: any) => normalizeProject(r)).filter((p) => Number.isFinite(p.id));
 }
 
-/** 비관리자: 내가 속한 프로젝트
- *  - `/projects/my`가 비어 있으면 그대로 빈 배열 반환 (절대 전체 폴백 금지)
- *  - `/projects/my`에 항목이 있을 때만 `/projects`로 **동일 ID**를 보강
- */
+/** 비관리자: 내가 속한 프로젝트 */
 export async function listMyProjects(): Promise<ProjectListDto[]> {
   let mapped: ProjectListDto[] = [];
   try {
@@ -272,4 +326,10 @@ export async function listMyProjects(): Promise<ProjectListDto[]> {
 export async function listProjects(opts?: { isAdmin?: boolean }): Promise<ProjectListDto[]> {
   if (opts?.isAdmin) return listProjectsAll();
   return listMyProjects();
+}
+
+/** 프로젝트 상세 */
+export async function getProjectDetail(projectId: number): Promise<ProjectDetailDto> {
+  const { data } = await http.get(`/projects/${projectId}`);
+  return normalizeProjectDetail(data);
 }
