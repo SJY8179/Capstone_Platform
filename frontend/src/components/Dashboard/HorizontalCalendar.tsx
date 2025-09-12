@@ -183,7 +183,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
   useEffect(() => {
     const handler = async () => {
       if (!projectId) return;
-      try { invalidateSchedulesCache(projectId); } catch {}
+      try { invalidateSchedulesCache(projectId); } catch { }
       await reload();
     };
 
@@ -193,7 +193,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
       // onChanged(handler)
       // @ts-ignore
       off = scheduleBus.onChanged?.(handler);
-    } catch {}
+    } catch { }
 
     try {
       // on("changed", handler)
@@ -204,12 +204,12 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
           try {
             // @ts-ignore
             scheduleBus.off?.("changed", handler);
-          } catch {}
+          } catch { }
         };
       }
-    } catch {}
+    } catch { }
 
-    return () => { try { off?.(); } catch {} };
+    return () => { try { off?.(); } catch { } };
   }, [projectId, fetchRange.from, fetchRange.to]);
 
   const getEventsForDate = (date: Date) => {
@@ -352,9 +352,8 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
               {DAY_LABELS.map((day, idx) => (
                 <div
                   key={day}
-                  className={`text-center py-2 text-sm font-medium ${
-                    idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
-                  }`}
+                  className={`text-center py-2 text-sm font-medium ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
+                    }`}
                 >
                   {day}
                 </div>
@@ -384,13 +383,12 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
                     onClick={() => setSelectedDate(key)}
                   >
                     <div
-                      className={`text-center mb-3 ${
-                        isToday(date)
+                      className={`text-center mb-3 ${isToday(date)
                           ? "font-bold text-primary"
                           : inCurrentMonth
                             ? ""
                             : "text-muted-foreground"
-                      }`}
+                        }`}
                     >
                       <span className="text-lg">{date.getDate()}</span>
                     </div>

@@ -80,6 +80,28 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     }
   };
 
+  const handleInviteSuccess = (updatedTeamId: number, newUser: UserDto) => {
+    const newMember = {
+      ...newUser,
+      role: "member" as const,
+      status: "active" as const,
+    };
+
+    setTeams(currentTeams =>
+      currentTeams.map(team => {
+        if (team.id === updatedTeamId) {
+          return {
+            ...team,
+            members: [...team.members, newMember],
+          };
+        }
+        return team;
+      })
+    );
+    setInvitableUsers(currentUsers => currentUsers.filter(u => u.id !== newUser.id));
+  };
+
+
   const handleOpenSettingsModal = (team: TeamListDto) => {
     setSelectedTeam(team);
     setIsSettingsModalOpen(true);
@@ -254,7 +276,8 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
         team={selectedTeam}
         users={invitableUsers}
         isLoading={isUsersLoading}
-        onInviteSuccess={fetchTeams}
+        onInviteSuccess={handleInviteSuccess}
+        // onInviteSuccess={fetchTeams}
       />
       <TeamSettingsModal
         isOpen={isSettingsModalOpen}

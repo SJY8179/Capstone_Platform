@@ -1,8 +1,8 @@
-﻿import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL /* 배포/프록시 커스텀 */ ??
-  "/api";    
+  "/api";
 
 export const http = axios.create({
   baseURL: API_BASE,
