@@ -6,15 +6,31 @@
 /frontend/dist/
 /frontend/.vite/
 /backend/src/main/resources/application-local.properties
-# frontend build artifacts
-frontend/node_modules/
-frontend/.vite/
+
+# build/cache
 frontend/dist/
+frontend/.vite/
+frontend/.cache/
+coverage/
+
+# temp/log
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# worktree/misc
+.trash/
 
 # Node/Vite (root & frontend)
 node_modules/
 .vite/
 dist/
-frontend/node_modules/
-frontend/.vite/
-frontend/dist/
+
+prompt.txt
