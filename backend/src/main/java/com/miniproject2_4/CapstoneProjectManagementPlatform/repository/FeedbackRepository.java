@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
 
@@ -16,4 +17,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
         order by f.createdAt desc
     """)
     List<Feedback> findRecentWithAuthor(@Param("pid") Long projectId);
+
+    Optional<Feedback> findByIdAndProject_Id(Long id, Long projectId);
 }

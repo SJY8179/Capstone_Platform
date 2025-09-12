@@ -1,18 +1,20 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.EventDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.EventRequests;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.EventType;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.EventService;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.util.ProjectAccessGuard;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +23,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/projects/{projectId}")
-public class EventController { // ← 파일명과 일치
+public class EventController {
 
     private final EventService eventService;
     private final ProjectAccessGuard projectAccessGuard;
@@ -30,18 +32,18 @@ public class EventController { // ← 파일명과 일치
     public record CreateReq(String title, String startAtIso, String endAtIso, EventType type, String location) {}
     public record UpdateReq(String title, String startAtIso, String endAtIso, EventType type, String location) {}
 
-    private Long currentUserId(Authentication auth) {
+    private UserAccount currentUser(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
         }
         Object p = auth.getPrincipal();
-        if (p instanceof UserAccount ua) return ua.getId();
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 올바르지 않습니다.");
+        if (p instanceof UserAccount ua) return ua;
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
 
     @GetMapping("/events")
     public ResponseEntity<List<EventDto>> list(@PathVariable Long projectId, Authentication auth) {
-        projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        projectAccessGuard.assertCanViewProject(projectId, currentUser(auth));
         return ResponseEntity.ok(eventService.listByProject(projectId));
     }
 
@@ -53,7 +55,7 @@ public class EventController { // ← 파일명과 일치
             @RequestParam("to")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             Authentication auth
     ) {
-        projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        projectAccessGuard.assertCanViewProject(projectId, currentUser(auth));
         if (to.isBefore(from)) {
             LocalDate tmp = from; from = to; to = tmp;
         }
@@ -62,9 +64,9 @@ public class EventController { // ← 파일명과 일치
 
     @PostMapping("/events")
     public ResponseEntity<EventDto> create(@PathVariable Long projectId,
-                                           @RequestBody CreateReq req,
+                                           @RequestBody @Valid EventRequests.Create req,
                                            Authentication auth) {
-        projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        projectAccessGuard.assertCanManageEvents(projectId, currentUser(auth));
         var e = eventService.create(projectId, req.title(), req.startAtIso(), req.endAtIso(), req.type(), req.location());
         return ResponseEntity.ok(EventDto.from(e));
     }
@@ -72,16 +74,16 @@ public class EventController { // ← 파일명과 일치
     @PatchMapping("/events/{id}")
     public ResponseEntity<EventDto> update(@PathVariable Long projectId,
                                            @PathVariable Long id,
-                                           @RequestBody UpdateReq req,
+                                           @RequestBody @Valid EventRequests.Update req,
                                            Authentication auth) {
-        projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        projectAccessGuard.assertCanManageEvents(projectId, currentUser(auth));
         var e = eventService.update(projectId, id, req.title(), req.startAtIso(), req.endAtIso(), req.type(), req.location());
         return ResponseEntity.ok(EventDto.from(e));
     }
 
     @DeleteMapping("/events/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long projectId, @PathVariable Long id, Authentication auth) {
-        projectAccessGuard.assertMember(projectId, currentUserId(auth));
+        projectAccessGuard.assertCanManageEvents(projectId, currentUser(auth));
         eventService.delete(projectId, id);
         return ResponseEntity.noContent().build();
     }

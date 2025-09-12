@@ -15,6 +15,7 @@ import { SettingsPage } from "@/components/Settings/SettingsPage";
 import { http } from "@/api/http";
 import { Toaster } from "@/components/ui/sonner";
 import type { User } from "@/types/user";
+import ProjectAssignments from "@/pages/Projects/Assignments";
 
 // 1. AppSettings 인터페이스 추가
 export interface AppSettings {
@@ -31,7 +32,8 @@ export type ActivePage =
   | "users"
   | "schedule"
   | "notifications"
-  | "settings";
+  | "settings"
+  | "assignments";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -178,8 +180,8 @@ export default function App() {
   }
 
   const renderMainContent = () => {
-    // 평가만 프로젝트 필요 (일정은 프로젝트 없어도 진입 → 빈 목록 + 추가 가능)
-    const needProject = activePage === "evaluation";
+    // 평가/과제는 프로젝트 필요
+    const needProject = activePage === "evaluation" || activePage === "assignments";
 
     if (needProject && !activeProjectId) {
       return (
@@ -191,22 +193,50 @@ export default function App() {
       );
     }
 
-
     switch (activePage) {
       case "dashboard":
-        if (currentUser.role === "student") return <StudentDashboard projectId={activeProjectId ?? undefined} />;
-        if (currentUser.role === "professor") return <ProfessorDashboard projectId={activeProjectId ?? undefined} />;
-        if (currentUser.role === "admin") return <AdminDashboard projectId={activeProjectId ?? undefined} />;
+        if (currentUser.role === "student")
+          return <StudentDashboard projectId={activeProjectId ?? undefined} />;
+        if (currentUser.role === "professor")
+          return <ProfessorDashboard projectId={activeProjectId ?? undefined} />;
+        if (currentUser.role === "admin")
+          return <AdminDashboard projectId={activeProjectId ?? undefined} />;
         return null;
 
-      case "projects": return <ProjectManagement userRole={currentUser.role} />;
-      case "teams": return <TeamManagement userRole={currentUser.role} />;
-      case "evaluation": return <EvaluationSystem userRole={currentUser.role} projectId={activeProjectId!} />;
-      case "users": return currentUser.role === "admin" ? <UserManagement /> : <div>권한이 없습니다.</div>;
-      case "schedule": return <ScheduleManagement userRole={currentUser.role} projectId={activeProjectId ?? undefined} />;
-      case "notifications": return <NotificationCenter userRole={currentUser.role} />;
+      case "projects":
+        return <ProjectManagement userRole={currentUser.role} />;
 
-      // 5. SettingsPage에 설정 관련 props 전달
+      case "teams":
+        return <TeamManagement userRole={currentUser.role} />;
+
+      case "evaluation":
+        if (currentUser.role === "student") return <div>권한이 없습니다.</div>;
+        return (
+          <EvaluationSystem
+            userRole={currentUser.role}
+            projectId={activeProjectId!}
+          />
+        );
+
+      case "users":
+        return currentUser.role === "admin"
+          ? <UserManagement />
+          : <div>권한이 없습니다.</div>;
+
+      case "schedule":
+        return (
+          <ScheduleManagement
+            userRole={currentUser.role}
+            projectId={activeProjectId ?? undefined}
+          />
+        );
+
+      case "assignments":
+        return <ProjectAssignments projectId={activeProjectId!} />;
+
+      case "notifications":
+        return <NotificationCenter />;
+
       case "settings":
         return (
           <SettingsPage
@@ -221,6 +251,7 @@ export default function App() {
         return <div>페이지를 찾을 수 없습니다.</div>;
     }
   };
+
 
   // 6. 사이드바 토글 버튼 비활성화 여부 계산
   const isSidebarToggleDisabled = appSettings.sidebarBehavior !== 'auto';

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Home,
   FolderOpen,
@@ -19,7 +19,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { ActivePage } from "../../App";
 import type { UserRole } from "@/types/user";
-import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
+import { listSchedulesInRange } from "@/api/schedules";
 import type { ScheduleDto, SchedulePriority, ScheduleType } from "@/types/domain";
 import { scheduleBus } from "@/lib/schedule-bus";
 
@@ -63,26 +63,40 @@ export function Sidebar({
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
 
   const getMenuItems = () => {
+    // 공통
     const common = [
       { id: "dashboard" as ActivePage, label: "대시보드", icon: Home },
       { id: "projects" as ActivePage, label: "프로젝트", icon: FolderOpen },
+      // ✅ 과제 페이지 추가 (영규님 기능)
+      { id: "assignments" as ActivePage, label: "과제", icon: ClipboardCheck },
     ];
-    const student = [...common, { id: "teams" as ActivePage, label: "팀 관리", icon: Users }];
+
+    const student = [
+      ...common,
+      { id: "teams" as ActivePage, label: "팀 관리", icon: Users },
+    ];
+
     const professor = [
       ...common,
       { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
       { id: "teams" as ActivePage, label: "팀 관리", icon: Users },
     ];
+
     const admin = [
       ...common,
       { id: "users" as ActivePage, label: "사용자 관리", icon: UserCog },
       { id: "evaluation" as ActivePage, label: "평가 시스템", icon: ClipboardCheck },
     ];
+
     switch (userRole) {
-      case "student": return student;
-      case "professor": return professor;
-      case "admin": return admin;
-      default: return common;
+      case "student":
+        return student;
+      case "professor":
+        return professor;
+      case "admin":
+        return admin;
+      default:
+        return common;
     }
   };
 
@@ -98,7 +112,6 @@ export function Sidebar({
       const to = new Date();
       to.setDate(from.getDate() + 14);
 
-      // toYMDLocal이 올바르게 사용되었는지 확인 (아마 이 부분은 문제가 없었을 겁니다)
       const rows: ScheduleDto[] = await listSchedulesInRange({
         from: toYMDLocal(from),
         to: toYMDLocal(to),
@@ -109,8 +122,7 @@ export function Sidebar({
         t === "deadline" || t === "meeting" || t === "task" || t === "presentation" ? t : "task";
       const mapPriority = (p?: SchedulePriority): UiSchedule["priority"] =>
         p === "high" || p === "medium" || p === "low" ? p : "low";
-      
-      // [오류 1 수정] s.start 대신 s.date와 s.time 사용
+
       const mapped: UiSchedule[] = (rows ?? [])
         .filter((s) => !!s.date)
         .map((s) => ({
@@ -123,7 +135,7 @@ export function Sidebar({
         }))
         .sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")))
         .slice(0, 3);
-        
+
       setUpcoming(mapped);
     } catch (e: any) {
       if (e?.status === 403 || e?.response?.status === 403) {
@@ -140,13 +152,10 @@ export function Sidebar({
   useEffect(() => {
     reloadUpcoming();
     const sub = scheduleBus.subscribe(reloadUpcoming);
-    // [오류 2 수정] sub()를 직접 호출하여 구독 해지
     return () => {
       try {
-        sub();
-      } catch (e) {
-        // 이미 해지된 경우 등 예외가 발생할 수 있으므로 안전하게 처리
-      }
+        sub(); // 구독 해지
+      } catch {}
     };
   }, [reloadUpcoming, projectId]);
 
@@ -155,30 +164,48 @@ export function Sidebar({
     const today = new Date();
     const tomorrow = new Date();
     tomorrow.setDate(today.getDate() + 1);
-    
+
     if (date.toDateString() === today.toDateString()) return "오늘";
     if (date.toDateString() === tomorrow.toDateString()) return "내일";
-    return date.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+    return date.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
   };
-  
+
   const scheduleIcon = (t: UiSchedule["type"]) => {
     switch (t) {
-        case 'deadline': return <AlertCircle className="h-3 w-3 text-red-500" />;
-        case 'presentation': return <Calendar className="h-3 w-3 text-blue-500" />;
-        case 'meeting': return <Users className="h-3 w-3 text-green-500" />;
-        default: return <Clock className="h-3 w-3 text-gray-500" />;
+      case "deadline":
+        return <AlertCircle className="h-3 w-3 text-red-500" />;
+      case "presentation":
+        return <Calendar className="h-3 w-3 text-blue-500" />;
+      case "meeting":
+        return <Users className="h-3 w-3 text-green-500" />;
+      default:
+        return <Clock className="h-3 w-3 text-gray-500" />;
     }
   };
 
   return (
-    <div className={`${collapsed ? "w-16" : "w-64"} bg-sidebar border-r border-sidebar-border transition-all duration-300 relative ${toggleDisabled ? 'shadow-lg' : ''}`}>
+    <div
+      className={`${
+        collapsed ? "w-16" : "w-64"
+      } bg-sidebar border-r border-sidebar-border transition-all duration-300 relative ${
+        toggleDisabled ? "shadow-lg" : ""
+      }`}
+    >
       <Button
-        variant="ghost" size="sm" onClick={onToggleCollapse}
+        variant="ghost"
+        size="sm"
+        onClick={onToggleCollapse}
         disabled={toggleDisabled} // 3. disabled 상태 적용
         className={`absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-sidebar shadow-md hover:bg-sidebar-accent ${
-          toggleDisabled ? 'opacity-50 cursor-not-allowed' : '' // 5. 고정 모드 시각적 피드백
+          toggleDisabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
-        title={toggleDisabled ? '사이드바 동작이 설정에서 고정되었습니다' : collapsed ? "사이드바 펼치기" : "사이드바 접기"} // 4. 툴팁 메시지 추가
+        title={
+          toggleDisabled
+            ? "사이드바 동작이 설정에서 고정되었습니다"
+            : collapsed
+            ? "사이드바 펼치기"
+            : "사이드바 접기"
+        } // 4. 툴팁 메시지 추가
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </Button>
@@ -230,29 +257,44 @@ export function Sidebar({
 
               {!collapsed && showScheduleDropdown && (
                 <div className="mt-2 ml-4 space-y-1 border-l border-sidebar-border pl-4">
-                  <div className="text-xs font-medium text-muted-foreground mb-2">다가오는 일정</div>
-                   {loadingUpcoming && <div className="text-xs text-center text-muted-foreground">로딩 중...</div>}
-                   {!loadingUpcoming && upcoming.length === 0 && <div className="text-xs text-center text-muted-foreground">일정이 없습니다.</div>}
-                   {!loadingUpcoming && upcoming.slice(0, 3).map((schedule) => (
-                    <div key={schedule.id} className="p-2 rounded-md hover:bg-sidebar-accent cursor-pointer">
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    다가오는 일정
+                  </div>
+                  {loadingUpcoming && (
+                    <div className="text-xs text-center text-muted-foreground">로딩 중...</div>
+                  )}
+                  {!loadingUpcoming && upcoming.length === 0 && (
+                    <div className="text-xs text-center text-muted-foreground">일정이 없습니다.</div>
+                  )}
+                  {!loadingUpcoming &&
+                    upcoming.slice(0, 3).map((schedule) => (
+                      <div key={schedule.id} className="p-2 rounded-md hover:bg-sidebar-accent cursor-pointer">
                         <div className="flex items-center gap-2 mb-1">
-                            {scheduleIcon(schedule.type)}
-                            <span className="text-xs font-medium truncate">{schedule.title}</span>
-                            {schedule.priority === 'high' && <Badge variant="destructive" className="text-xs h-4 px-1 leading-3">!</Badge>}
+                          {scheduleIcon(schedule.type)}
+                          <span className="text-xs font-medium truncate">{schedule.title}</span>
+                          {schedule.priority === "high" && (
+                            <Badge variant="destructive" className="text-xs h-4 px-1 leading-3">
+                              !
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{formatScheduleDate(schedule.date)} {schedule.time}</span>
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            {formatScheduleDate(schedule.date)} {schedule.time}
+                          </span>
                         </div>
+                      </div>
+                    ))}
+                  {!loadingUpcoming && upcoming.length > 3 && (
+                    <div className="text-xs text-center text-muted-foreground pt-1">
+                      + {upcoming.length - 3}개 더
                     </div>
-                   ))}
-                   {!loadingUpcoming && upcoming.length > 3 && (
-                    <div className="text-xs text-center text-muted-foreground pt-1">+ {upcoming.length - 3}개 더</div>
-                   )}
+                  )}
                 </div>
               )}
             </div>
-            
+
             <Button
               variant={activePage === "notifications" ? "secondary" : "ghost"}
               className={`w-full ${collapsed ? "justify-center px-2" : "justify-start gap-3"}`}
@@ -263,8 +305,10 @@ export function Sidebar({
               {!collapsed && (
                 <>
                   <span>공지사항</span>
-                  {/* TODO: 이 숫자는 실제 알림 데이터와 연동해야 합니다. */}
-                  <Badge variant="destructive" className="ml-auto h-5 px-1.5 text-xs">3</Badge>
+                  {/* TODO: 실제 알림 데이터와 연동 */}
+                  <Badge variant="destructive" className="ml-auto h-5 px-1.5 text-xs">
+                    3
+                  </Badge>
                 </>
               )}
             </Button>

@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Plus, Users,
-  FileText, ChevronDown, ChevronUp, AlertCircle,
+  FileText, ChevronDown, ChevronUp, AlertCircle, Video,
 } from "lucide-react";
 import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type { ScheduleDto, ScheduleType, SchedulePriority, EventType } from "@/types/domain";
@@ -20,6 +20,8 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { getApiError, isAccessError, accessErrorMessage } from "@/api/http";
 
 interface HorizontalCalendarProps {
   className?: string;
@@ -169,6 +171,14 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         projectId,
       });
       setEvents(mapToUi(rows));
+    } catch (e) {
+      const err = getApiError(e);
+      if (isAccessError(err) || err.status === 403) {
+        toast.error(accessErrorMessage(err.code));
+        setEvents([]);
+      } else {
+        console.error(e);
+      }
     } finally {
       setLoading(false);
     }
@@ -183,7 +193,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
   useEffect(() => {
     const handler = async () => {
       if (!projectId) return;
-      try { invalidateSchedulesCache(projectId); } catch { }
+      try { invalidateSchedulesCache(projectId); } catch {}
       await reload();
     };
 
@@ -193,7 +203,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
       // onChanged(handler)
       // @ts-ignore
       off = scheduleBus.onChanged?.(handler);
-    } catch { }
+    } catch {}
 
     try {
       // on("changed", handler)
@@ -204,12 +214,12 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
           try {
             // @ts-ignore
             scheduleBus.off?.("changed", handler);
-          } catch { }
+          } catch {}
         };
       }
-    } catch { }
+    } catch {}
 
-    return () => { try { off?.(); } catch { } };
+    return () => { try { off?.(); } catch {} };
   }, [projectId, fetchRange.from, fetchRange.to]);
 
   const getEventsForDate = (date: Date) => {
@@ -227,6 +237,8 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         return <AlertCircle className={`${cls} text-red-500`} />;
       case "meeting":
         return <Users className={`${cls} text-green-500`} />;
+      case "presentation":
+        return <Video className={`${cls} text-blue-500`} />;
       case "task":
       default:
         return <FileText className={`${cls} text-purple-500`} />;
@@ -245,6 +257,12 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
         return (
           <Badge variant="secondary" className="text-xs">
             회의
+          </Badge>
+        );
+      case "presentation":
+        return (
+          <Badge className="text-xs">
+            발표
           </Badge>
         );
       case "task":
@@ -282,6 +300,8 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
 
   const onClickAdd = () => {
     if (!projectId) {
+      // 안내 다이얼로그 + 토스트 동시 노출
+      toast.info("프로젝트 참여가 필요합니다.");
       setNeedProjectOpen(true);
       return;
     }
@@ -352,8 +372,9 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
               {DAY_LABELS.map((day, idx) => (
                 <div
                   key={day}
-                  className={`text-center py-2 text-sm font-medium ${idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
-                    }`}
+                  className={`text-center py-2 text-sm font-medium ${
+                    idx === 0 ? "text-red-500" : idx === 6 ? "text-blue-500" : ""
+                  }`}
                 >
                   {day}
                 </div>
@@ -383,12 +404,13 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
                     onClick={() => setSelectedDate(key)}
                   >
                     <div
-                      className={`text-center mb-3 ${isToday(date)
+                      className={`text-center mb-3 ${
+                        isToday(date)
                           ? "font-bold text-primary"
                           : inCurrentMonth
                             ? ""
                             : "text-muted-foreground"
-                        }`}
+                      }`}
                     >
                       <span className="text-lg">{date.getDate()}</span>
                     </div>
@@ -475,7 +497,7 @@ export function HorizontalCalendar({ className, projectId }: HorizontalCalendarP
                   .map((event) => (
                     <div
                       key={event.id}
-                      className={`p-6 border-l-4 bg-muted/30 rounded-r-md`}
+                      className={`p-6 border-l-4 bg-muted/30 rounded-r-md ${getPriorityColor(event.priority)}`}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">

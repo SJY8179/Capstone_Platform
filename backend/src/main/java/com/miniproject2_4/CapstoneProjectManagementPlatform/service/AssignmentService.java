@@ -2,14 +2,17 @@ package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Assignment;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.AssignmentStatus;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Project;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.AssignmentRepository;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.ProjectRepository;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.TeamMemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +20,7 @@ public class AssignmentService {
 
     private final AssignmentRepository assignmentRepository;
     private final ProjectRepository projectRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
     /** 프로젝트의 과제를 마감일 오름차순으로 모두 가져오기 */
     public List<Assignment> listByProjectOrdered(Long projectId) {
@@ -86,6 +90,36 @@ public class AssignmentService {
             throw new IllegalArgumentException("Assignment does not belong to project: " + projectId);
         }
         assignmentRepository.delete(a);
+    }
+
+    /** ====== 학생 '검토 요청' (ONGOING → PENDING) ====== */
+    @Transactional
+    public Assignment requestReview(Long projectId, Long assignmentId, Long userId, String message) {
+        var a = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("Assignment not found: " + assignmentId));
+
+        Project p = a.getProject();
+        if (p == null || !Objects.equals(p.getId(), projectId)) {
+            throw new IllegalArgumentException("Assignment does not belong to project: " + projectId);
+        }
+
+        // (선택적) 권한검사: userId가 주어지면 '해당 프로젝트 팀의 멤버'인지 확인
+        if (userId != null) {
+            if (p.getTeam() == null || !teamMemberRepository.existsByTeam_IdAndUser_Id(p.getTeam().getId(), userId)) {
+                throw new IllegalArgumentException("User is not a member of the project team");
+            }
+        }
+
+        // 이미 완료된 과제는 재검토 요청 금지(원하면 정책 변경 가능)
+        if (a.getStatus() == AssignmentStatus.COMPLETED) {
+            throw new IllegalStateException("Completed assignment cannot be requested for review");
+        }
+
+        // 상태 변경: ONGOING(또는 PENDING) -> PENDING
+        a.setStatus(AssignmentStatus.PENDING);
+
+        // message 는 현재 저장 로직 없음(향후 ReviewLog 등과 연동 가능)
+        return a; // dirty checking
     }
 
     /* ===== 유틸 ===== */

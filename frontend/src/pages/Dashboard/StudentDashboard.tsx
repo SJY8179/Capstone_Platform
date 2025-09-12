@@ -147,7 +147,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   useEffect(() => {
     const handler = async () => {
       if (!projectId) return;
-      try { invalidateSchedulesCache(projectId); } catch { }
+      try { invalidateSchedulesCache(projectId); } catch {}
       await refreshSchedules();
     };
 
@@ -157,7 +157,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
       // onChanged(handler) 형태 지원
       // @ts-ignore
       off = scheduleBus.onChanged?.(handler);
-    } catch { }
+    } catch {}
 
     try {
       // on("changed", handler) 형태 지원
@@ -168,12 +168,12 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           try {
             // @ts-ignore
             scheduleBus.off?.("changed", handler);
-          } catch { }
+          } catch {}
         };
       }
-    } catch { }
+    } catch {}
 
-    return () => { try { off?.(); } catch { } };
+    return () => { try { off?.(); } catch {} };
   }, [projectId, refreshSchedules]);
 
   /* 카드 상단 요약 값 */
@@ -350,8 +350,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 const dateTime =
                   item.date
                     ? new Date(
-                      `${item.date}T${item.time ? item.time : "00:00"}:00`
-                    )
+                        `${item.date}T${item.time ? item.time : "00:00"}:00`
+                      )
                     : null;
 
                 return (

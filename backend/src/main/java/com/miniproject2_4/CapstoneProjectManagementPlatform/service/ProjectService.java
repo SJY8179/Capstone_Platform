@@ -9,9 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +30,39 @@ public class ProjectService {
                 .toList();
     }
 
-    private ProjectListDto toListDto(Project p) {
+    /** 내가 볼 수 있는(=내 프로젝트) 목록: 학생=팀멤버, 교수=담당프로젝트(+팀멤버), 관리자=전체 */
+    public List<ProjectListDto> listProjectsForUser(UserAccount ua) {
+        if (ua == null) return List.of();
+
+        if (ua.getRole() == Role.ADMIN) {
+            return listProjects();
+        }
+
+        // 학생/교수 공통: 팀 멤버로 속한 프로젝트
+        List<Project> member = projectRepository.findAllByMemberUserId(ua.getId());
+
+        // 교수: 담당 프로젝트(팀 멤버 여부 무관)
+        List<Project> teaching = (ua.getRole() == Role.PROFESSOR)
+                ? projectRepository.findAllByProfessorUserId(ua.getId())
+                : List.of();
+
+        // distinct by id (멤버+담당 결합)
+        Map<Long, Project> uniq = new LinkedHashMap<>();
+        for (Project p : member) uniq.put(p.getId(), p);
+        for (Project p : teaching) uniq.put(p.getId(), p);
+
+        return uniq.values().stream().map(this::toListDto).toList();
+    }
+
+    /** 교수 전용: 담당 프로젝트 목록 */
+    public List<ProjectListDto> listProjectsByProfessor(Long userId) {
+        return projectRepository.findAllByProfessorUserId(userId).stream()
+                .map(this::toListDto)
+                .toList();
+    }
+
+    /* ===== 내부 매핑 ===== */
+    public ProjectListDto toListDto(Project p) {
         String teamName = (p.getTeam() != null && p.getTeam().getName() != null)
                 ? p.getTeam().getName()
                 : "미지정 팀";
@@ -57,7 +87,6 @@ public class ProjectService {
                 .min(Comparator.comparing(Assignment::getDueDate))
                 .orElse(null);
 
-        // 최근 업데이트 = 과제 dueDate, 이벤트 startAt 중 최댓값 → 없으면 엔티티 updatedAt/createdAt
         LocalDateTime luAssign = assigns.stream()
                 .map(Assignment::getDueDate).filter(Objects::nonNull)
                 .max(Comparator.naturalOrder()).orElse(null);
@@ -73,7 +102,7 @@ public class ProjectService {
         return new ProjectListDto(
                 p.getId(),
                 p.getTitle() != null ? p.getTitle() : ("프로젝트 #" + p.getId()),
-                null, // 별도 설명 필드가 없으면 null
+                null,
                 mapStatus(p.getStatus()),
                 teamName,
                 lastUpdate,
@@ -85,7 +114,6 @@ public class ProjectService {
         );
     }
 
-    /** Project.getStatus()가 enum이든 문자열이든 대응 */
     private String mapStatus(Object raw) {
         if (raw == null) return "in-progress";
         String s = (raw instanceof Enum<?> e) ? e.name() : String.valueOf(raw);
