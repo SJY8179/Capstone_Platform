@@ -273,3 +273,18 @@ export async function listProjects(opts?: { isAdmin?: boolean }): Promise<Projec
   if (opts?.isAdmin) return listProjectsAll();
   return listMyProjects();
 }
+
+/** 프로젝트 생성 요청 타입 */
+export interface ProjectCreateRequest {
+  title: string;
+  description?: string;
+  teamId?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+/** 프로젝트 생성 API */
+export async function createProject(req: ProjectCreateRequest): Promise<ProjectListDto> {
+  const { data } = await http.post("/projects", req);
+  return normalizeProject(data);
+}
