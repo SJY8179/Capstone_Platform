@@ -26,8 +26,8 @@ public class TeamService {
 
     /** 공통: Team -> TeamListDto 매핑 */
     private TeamListDto toDto(Team team) {
-        // 한 번만 조회해서 재사용
-        Optional<Project> prjOpt = projectRepository.findByTeam_Id(team.getId());
+        // 동일 팀의 프로젝트가 여러 개여도 안전하게 최신 1건만 선택
+        Optional<Project> prjOpt = projectRepository.findTopByTeam_IdOrderByCreatedAtDesc(team.getId());
         String projectTitle = prjOpt.map(Project::getTitle).orElse("미배정 프로젝트");
         Long projectId = prjOpt.map(Project::getId).orElse(null);
 

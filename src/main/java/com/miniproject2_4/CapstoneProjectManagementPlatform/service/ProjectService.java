@@ -30,28 +30,28 @@ public class ProjectService {
                 .toList();
     }
 
-    /** 내가 볼 수 있는(=내 프로젝트) 목록: 학생=팀멤버, 교수=담당프로젝트(+팀멤버), 관리자=전체 */
+    /**
+     * 내가 볼 수 있는 프로젝트 목록
+     * - ADMIN    : 전체
+     * - PROFESSOR: "담당 교수"로 매핑된 프로젝트만 (professor_id 기준)
+     * - STUDENT  : 내가 팀 멤버인 프로젝트만
+     */
     public List<ProjectListDto> listProjectsForUser(UserAccount ua) {
         if (ua == null) return List.of();
 
         if (ua.getRole() == Role.ADMIN) {
             return listProjects();
+        } else if (ua.getRole() == Role.PROFESSOR) {
+            // ✅ 교수는 오직 자신이 담당(professor_id)인 프로젝트만
+            return projectRepository.findAllByProfessorUserId(ua.getId()).stream()
+                    .map(this::toListDto)
+                    .toList();
+        } else {
+            // 학생: 팀 멤버십 기준
+            return projectRepository.findAllByMemberUserId(ua.getId()).stream()
+                    .map(this::toListDto)
+                    .toList();
         }
-
-        // 학생/교수 공통: 팀 멤버로 속한 프로젝트
-        List<Project> member = projectRepository.findAllByMemberUserId(ua.getId());
-
-        // 교수: 담당 프로젝트(팀 멤버 여부 무관)
-        List<Project> teaching = (ua.getRole() == Role.PROFESSOR)
-                ? projectRepository.findAllByProfessorUserId(ua.getId())
-                : List.of();
-
-        // distinct by id (멤버+담당 결합)
-        Map<Long, Project> uniq = new LinkedHashMap<>();
-        for (Project p : member) uniq.put(p.getId(), p);
-        for (Project p : teaching) uniq.put(p.getId(), p);
-
-        return uniq.values().stream().map(this::toListDto).toList();
     }
 
     /** 교수 전용: 담당 프로젝트 목록 */

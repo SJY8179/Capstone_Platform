@@ -16,10 +16,11 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     """)
     List<Project> findAllWithTeam();
 
-    Optional<Project> findFirstByTeam_Id(Long teamId);
+    /** 동일 팀의 여러 프로젝트 중 가장 최근 생성된 하나를 선택 */
+    Optional<Project> findTopByTeam_IdOrderByCreatedAtDesc(Long teamId);
+
     /** 담당교수 여부를 즉시 판정 (엔티티 로딩 없이 EXISTS) */
-    boolean existsByIdAndProfessor_Id(Long id, Long professorId);
-    Optional<Project> findByTeam_Id(Long teamId);
+    boolean existsByIdAndProfessor_Id(Long projectId, Long userId);
 
     /** 내가 속한 프로젝트 (팀 fetch join) */
     @Query("""
@@ -51,5 +52,4 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     /** (선택) 파생 쿼리도 필요하면 사용 가능 – fetch join은 안 걸림 */
     List<Project> findAllByProfessor_Id(Long userId);
-
 }
