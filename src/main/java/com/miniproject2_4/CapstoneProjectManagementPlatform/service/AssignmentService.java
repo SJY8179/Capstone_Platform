@@ -50,7 +50,14 @@ public class AssignmentService {
         var a = new Assignment();
         a.setProject(proj);
         a.setTitle(title != null ? title : "");
-        a.setDueDate(parseDateTime(dueDateIso));
+
+        // dueDate 보정: 입력 없으면 +7일 23:59, 날짜만 오면 23:59 로 보정
+        LocalDateTime due = parseDateTime(dueDateIso);
+        if (due == null) {
+            due = LocalDate.now().plusDays(7).atTime(23, 59);
+        }
+        a.setDueDate(due);
+
         a.setStatus(status != null ? status : AssignmentStatus.PENDING);
         return assignmentRepository.save(a);
     }
@@ -64,7 +71,15 @@ public class AssignmentService {
             throw new IllegalArgumentException("Assignment does not belong to project: " + projectId);
         }
         if (title != null) a.setTitle(title);
-        if (dueDateIso != null) a.setDueDate(parseDateTime(dueDateIso));
+
+        if (dueDateIso != null) {
+            LocalDateTime parsed = parseDateTime(dueDateIso);
+            // 빈 문자열 등으로 null이 나오면 변경하지 않고 유지 (DB 제약 보호)
+            if (parsed != null) {
+                a.setDueDate(parsed);
+            }
+        }
+
         if (status != null) a.setStatus(status);
         return a; // dirty checking
     }
@@ -124,13 +139,16 @@ public class AssignmentService {
 
     /* ===== 유틸 ===== */
 
-    /** "yyyy-MM-ddTHH:mm:ss" | Offset | Instant | "yyyy-MM-dd" 지원 */
+    /** "yyyy-MM-ddTHH:mm:ss" | Offset | Instant | "yyyy-MM-dd" 지원
+     *  - 날짜만 오면 23:59로 보정
+     */
     private static LocalDateTime parseDateTime(String v) {
         if (v == null || v.isBlank()) return null;
         try { return LocalDateTime.ofInstant(Instant.parse(v), ZoneId.systemDefault()); } catch (DateTimeException ignore) {}
         try { return OffsetDateTime.parse(v).toLocalDateTime(); } catch (DateTimeException ignore) {}
         try { return LocalDateTime.parse(v); } catch (DateTimeException ignore) {}
+        // date-only
         var d = LocalDate.parse(v);
-        return d.atStartOfDay();
+        return d.atTime(23, 59);
     }
 }
