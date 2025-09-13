@@ -1,4 +1,4 @@
-export type UserRole = "student" | "professor" | "admin";
+export type UserRole = "student" | "professor" | "admin" | "ta";
 
 export interface User {
   id: string;
@@ -8,9 +8,9 @@ export interface User {
   avatarUrl?: string | null;
 }
 
-/** 교수/관리자 여부 헬퍼 */
+/** 교수/관리자/조교 여부 헬퍼 */
 export const isProfOrAdmin = (role?: UserRole | null) =>
-  role === "professor" || role === "admin";
+  role === "professor" || role === "admin" || role === "ta";
 
 /** 허용된 역할 집합에 포함되는지 */
 export const hasRole = (

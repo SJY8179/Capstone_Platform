@@ -45,11 +45,6 @@ interface ProjectManagementProps {
   userRole: UserRole;
 }
 
-/** (참고용) 내 프로젝트 판정 – 지금은 서버에서 이미 필터된 목록을 쓰므로 사용 안 함 */
-function isMyProject(_p: ProjectListDto, _me?: User | null): boolean {
-  return true;
-}
-
 export function ProjectManagement({ userRole }: ProjectManagementProps) {
   const { user } = useAuth();
   const isAdmin = (user?.role ?? userRole) === "admin";
@@ -100,12 +95,19 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     });
 
     return sorted.filter(byTab).filter(bySearch);
+
+
   }, [projects, searchQuery, tab]);
 
   const renderActions = (p: ProjectListDto) => {
     if (userRole === "student") {
       return (
         <div className="flex gap-2">
+          {/* ✅ 학생도 프로젝트 상세(개요서 포함) 열람 가능 */}
+          <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
+            <Eye className="h-4 w-4 mr-1" />
+            열람
+          </Button>
           <Button size="sm" variant="outline">
             <FileText className="h-4 w-4 mr-1" />
             보고서 작성
@@ -331,5 +333,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         </DialogContent>
       </Dialog>
     </div>
+
+
   );
 }

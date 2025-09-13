@@ -15,10 +15,12 @@ class AuthStore {
     this.state = { ...this.state, ...partial };
   }
 
+  /** 서버 role(normalize): ROLE_ 접두/대소문자/공백/ta 지원 */
   private normalizeRole(role: unknown): UserRole {
-    const r = String(role ?? "").toLowerCase();
-    if (r === "student" || r === "professor" || r === "admin") return r as UserRole;
-    // 모호/누락 시 안전 기본값
+    const r = String(role ?? "").trim().replace(/^ROLE_/i, "").toLowerCase();
+    if (r === "student" || r === "professor" || r === "admin" || r === "ta") {
+      return r as UserRole;
+    }
     return "student";
   }
 
