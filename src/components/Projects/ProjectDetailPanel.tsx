@@ -38,7 +38,12 @@ import {
   createDecision,
   updateDecision,
   deleteDecision,
+  uploadLocalFile,
 } from "@/api/projectDetails";
+
+/* 파일 미리보기/아이콘 */
+import { FileThumb } from "@/components/files/FileThumb";
+import { FileIcon } from "@/components/files/FileIcon";
 
 /* ------------------------------------------------
  * 권한 타입 및 조회 함수
@@ -48,8 +53,8 @@ type ProjectPermissions = {
   isProfessor: boolean;
   isAdmin: boolean;
   canView: boolean;
-  canCreateDoc: boolean;
-  canDeleteDoc: boolean;
+  canCreateDoc: boolean;   // 서버 계산값 사용 (팀멤버 OR 담당교수 OR 관리자)
+  canDeleteDoc: boolean;   // 동일
   canRequestReview: boolean;
   canModerateAssignments: boolean;
 };
@@ -103,10 +108,9 @@ const TASK_BADGE: Record<
 export default function ProjectDetailPanel({ projectId }: { projectId: number }) {
   const { user, me } = useAuth();
 
-  // 로그인 복원(새로고침 등)
   useEffect(() => {
     if (!user) {
-      me().catch(() => {});
+      me().catch(() => { });
     }
   }, [user, me]);
 
@@ -116,11 +120,9 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // 탭 상태
   const [tab, setTab] =
     useState<"overview" | "work" | "risks" | "decisions" | "files">("overview");
 
-  // 서버 데이터(섹션별)
   const [overview, setOverview] = useState<ProjectOverviewDto | null>(null);
   const [docs, setDocs] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
@@ -162,7 +164,7 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
     };
   }, [projectId]);
 
-  // 권한 기반: 교수/관리자는 게시/승인/반려 가능, 학생(팀 멤버)은 검토 요청만 가능
+  // 서버 계산값 그대로 사용
   const canPublish = !!perms?.canModerateAssignments;
   const canCreateDoc = !!perms?.canCreateDoc;
   const canDeleteDoc = !!perms?.canDeleteDoc;
@@ -194,10 +196,8 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
     );
   }
 
-  // ⬇개요서 버전/펜딩 유무가 바뀌면 섹션을 리마운트하여 로컬 상태 초기화
   const overviewKey = `${overview?.version ?? 0}-${overview?.pendingMarkdown ? 1 : 0}`;
 
-  // 깃허브 링크 저장 핸들러 (저장 후 최신 상세 반영)
   const handleSaveRepo = async (githubUrl: string | null) => {
     const updated = await updateProjectRepo(projectId, githubUrl);
     setData(updated);
@@ -268,7 +268,7 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
 
         <TabsContent value="overview" className="mt-4">
           <OverviewSection
-            key={overviewKey} // 리마운트용 key
+            key={overviewKey}
             projectId={projectId}
             overview={overview}
             canPublish={canPublish}
@@ -337,11 +337,9 @@ const OverviewSection = memo(function OverviewSection({
   const [text, setText] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
-  // 초안 존재 여부로 검토대기 판단
   const hasPending =
     !!overview?.pendingMarkdown && (overview.pendingMarkdown ?? "").length > 0;
 
-  // 서버에서 내려온 값 → 에디터에 반영
   useEffect(() => {
     setText(overview?.pendingMarkdown ?? overview?.markdown ?? "");
   }, [
@@ -349,10 +347,9 @@ const OverviewSection = memo(function OverviewSection({
     overview?.pendingMarkdown,
     overview?.status,
     overview?.updatedAt,
-    overview?.version, // 버전 변경 시에도 동기화
+    overview?.version,
   ]);
 
-  // 공통: 서버 최신 개요서 재조회해서 상태/에디터 동기화
   const reloadOverview = async () => {
     const fresh = await getOverview(projectId);
     onOverviewChange(fresh);
@@ -364,7 +361,7 @@ const OverviewSection = memo(function OverviewSection({
     try {
       setSaving(true);
       await saveOverview(projectId, text);
-      await reloadOverview(); // 저장 후 재조회
+      await reloadOverview();
     } finally {
       setSaving(false);
     }
@@ -375,7 +372,7 @@ const OverviewSection = memo(function OverviewSection({
     try {
       setSaving(true);
       await submitOverviewProposal(projectId, text);
-      await reloadOverview(); // 제안 후 재조회
+      await reloadOverview();
     } finally {
       setSaving(false);
     }
@@ -385,7 +382,7 @@ const OverviewSection = memo(function OverviewSection({
     try {
       setSaving(true);
       await approveOverviewProposal(projectId);
-      await reloadOverview(); // 승인 후 재조회
+      await reloadOverview();
     } finally {
       setSaving(false);
     }
@@ -395,7 +392,7 @@ const OverviewSection = memo(function OverviewSection({
     try {
       setSaving(true);
       await rejectOverviewProposal(projectId);
-      await reloadOverview(); // 반려 후 재조회
+      await reloadOverview();
     } finally {
       setSaving(false);
     }
@@ -630,7 +627,7 @@ const WorkSection = memo(function WorkSection({
 
           <Separator />
 
-          {/* 깃허브 링크 편집 (모든 사용자 가능) */}
+          {/* 깃허브 링크 편집 */}
           <div className="space-y-2">
             <p className="text-sm font-medium flex items-center gap-2">
               <GitBranch className="h-4 w-4" />
@@ -673,25 +670,112 @@ const FilesSection = memo(function FilesSection({
   canCreateDoc: boolean;
   canDeleteDoc: boolean;
 }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadPct, setUploadPct] = useState<number>(0);
+
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null); // URL 에러 메시지
   const [type, setType] =
     useState<"SPEC" | "REPORT" | "PRESENTATION" | "OTHER">("OTHER");
+
   const [busy, setBusy] = useState(false);
 
-  const onCreate = async () => {
-    if (!title.trim() || !url.trim()) return;
+  // 외부 링크/상대경로 정규화: 스킴 없으면 https:// 붙이고,
+  // //example.com 은 https:로, /api/... 같은 내부 경로는 그대로 둔다.
+  const normalizeExternalUrl = (u: string) => {
+    const raw = (u || "").trim();
+    if (!raw) return "";
+    if (raw.startsWith("/")) return raw; // 내부 경로는 그대로
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return raw; // 스킴 존재
+    if (raw.startsWith("//")) return "https:" + raw;
+    return "https://" + raw;
+  };
+
+  // 프론트 유효성 검사: 내부경로 허용, 그 외 http/https + host 필수
+  const validateExternalUrl = (value: string): string | null => {
+    const v = (value || "").trim();
+    if (!v) return "URL을 입력하세요.";
+    if (/\s/.test(v)) return "URL에 공백이 포함될 수 없습니다.";
+
+    if (v.startsWith("/")) return null; // 내부 경로는 통과
+
+    const normalized = normalizeExternalUrl(v);
+    try {
+      const u = new URL(normalized);
+      const scheme = (u.protocol || "").replace(":", "").toLowerCase();
+      if (scheme !== "http" && scheme !== "https") {
+        return "지원하지 않는 프로토콜입니다. http(s):// 형태여야 합니다.";
+      }
+      if (!u.hostname) return "도메인이 없습니다. 예) https://example.com";
+      return null;
+    } catch {
+      return "URL 형식이 올바르지 않습니다. 예) https://example.com/path";
+    }
+  };
+
+  const onUpload = async () => {
+    if (!file) return;
+
+    const MAX_MB = 10;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`파일은 최대 ${MAX_MB}MB까지 업로드할 수 있어요.`);
+      return;
+    }
+
     try {
       setBusy(true);
-      const created = await createDoc(projectId, { title, url, type });
+      setUploadPct(0);
+
+      const res = await uploadLocalFile(file, (p) => setUploadPct(p));
+      const objectUrl = (res as any)?.objectUrl ?? (res as any)?.url;
+      if (!objectUrl) {
+        throw new Error("업로드 응답에 URL이 없습니다.");
+      }
+
+      const created = await createDoc(projectId, {
+        title: title.trim() || file.name,
+        url: objectUrl, // 내부 경로(/api/...)는 그대로 저장
+        type,
+      });
+
       setDocs((prev) => [created, ...prev]);
+      setFile(null);
       setTitle("");
       setUrl("");
+      setUrlError(null);
       setType("OTHER");
+      setUploadPct(0);
     } finally {
       setBusy(false);
     }
   };
+
+  const onCreateByUrl = async () => {
+    if (!title.trim() || !url.trim()) return;
+    const err = validateExternalUrl(url);
+    if (err) {
+      setUrlError(err);
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const normalized = normalizeExternalUrl(url);
+      const created = await createDoc(projectId, { title, url: normalized, type });
+      setDocs((prev) => [created, ...prev]);
+      setTitle("");
+      setUrl("");
+      setUrlError(null);
+      setType("OTHER");
+    } catch (e: any) {
+      // 백엔드 검증 실패 등
+      alert(e?.message ?? "링크를 추가하지 못했습니다. URL을 확인해 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onDelete = async (id: number) => {
     const old = docs;
     setDocs((prev) => prev.filter((d) => d.id !== id));
@@ -708,33 +792,99 @@ const FilesSection = memo(function FilesSection({
   return (
     <div className="space-y-4">
       {canCreateDoc && (
-        <div className="grid md:grid-cols-[1fr_1fr_auto] gap-2">
-          <Input
-            placeholder="제목"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <Input
-            placeholder="URL"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-          <div className="flex items-center gap-2">
-            <select
-              className="h-9 px-2 rounded-md border bg-background text-sm"
-              value={type}
-              onChange={(e) => setType(e.target.value as any)}
-            >
-              <option value="SPEC">명세</option>
-              <option value="REPORT">보고서</option>
-              <option value="PRESENTATION">발표</option>
-              <option value="OTHER">기타</option>
-            </select>
-            <Button onClick={onCreate} disabled={busy}>
-              추가
-            </Button>
-          </div>
-        </div>
+        <>
+          {/* 1) 파일 업로드 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">파일 업로드(로컬 저장)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="grid md:grid-cols-[1fr_auto] gap-2">
+                <Input
+                  type="file"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+                <Button onClick={onUpload} disabled={busy || !file}>
+                  업로드
+                </Button>
+              </div>
+
+              <div className="grid md:grid-cols-[1fr_200px] gap-2">
+                <Input
+                  placeholder="문서 제목(선택, 미입력 시 파일명 사용)"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+                <select
+                  className="h-9 px-2 rounded-md border bg-background text-sm"
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                >
+                  <option value="SPEC">명세</option>
+                  <option value="REPORT">보고서</option>
+                  <option value="PRESENTATION">발표</option>
+                  <option value="OTHER">기타</option>
+                </select>
+              </div>
+
+              {busy && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>업로드 진행률</span>
+                    <span>{uploadPct}%</span>
+                  </div>
+                  <Progress value={uploadPct} className="h-2" />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 2) 외부 링크 등록 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">외부 링크 등록</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="grid md:grid-cols-[1fr_1fr_auto] gap-2">
+                <Input
+                  placeholder="제목"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+                <div className="space-y-1">
+                  <Input
+                    placeholder="URL (예: https://example.com)"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      setUrlError(validateExternalUrl(e.target.value));
+                    }}
+                    aria-invalid={!!urlError}
+                    className={urlError ? "border-destructive focus-visible:ring-destructive" : ""}
+                  />
+                  {urlError && (
+                    <p className="text-xs text-destructive">{urlError}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-9 px-2 rounded-md border bg-background text-sm"
+                    value={type}
+                    onChange={(e) => setType(e.target.value as any)}
+                  >
+                    <option value="SPEC">명세</option>
+                    <option value="REPORT">보고서</option>
+                    <option value="PRESENTATION">발표</option>
+                    <option value="OTHER">기타</option>
+                  </select>
+                  <Button onClick={onCreateByUrl} disabled={busy || !!urlError}>
+                    추가
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <div className="space-y-2">
@@ -743,36 +893,54 @@ const FilesSection = memo(function FilesSection({
             등록된 파일/링크가 없습니다.
           </p>
         )}
-        {docs.map((d) => (
-          <Card key={d.id}>
-            <CardContent className="py-3 px-4 flex items-center justify-between">
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{d.title}</div>
-                <a
-                  className="text-xs text-muted-foreground underline underline-offset-4 break-all"
-                  href={d.url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {d.url}
-                </a>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{d.type}</Badge>
-                {canDeleteDoc && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => onDelete(d.id)}
-                    disabled={busy}
+        {docs.map((d) => {
+          const href = normalizeExternalUrl(d.url);
+          return (
+            <Card key={d.id}>
+              <CardContent className="file-card-row py-3 px-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={d.title}
+                    className="shrink-0 inline-flex items-center no-underline"
+                    style={{ textDecoration: "none" }}
                   >
-                    삭제
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                    <FileThumb url={href} filename={d.title} size={48} className="bg-background" />
+                  </a>
+
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{d.title}</div>
+                    <a
+                      className="file-link text-xs text-muted-foreground block max-w-full break-all"
+                      style={{ overflowWrap: "anywhere", wordBreak: "break-all" }}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={href}
+                    >
+                      {href}
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="outline">{d.type}</Badge>
+                  {canDeleteDoc && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => onDelete(d.id)}
+                      disabled={busy}
+                    >
+                      삭제
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -832,8 +1000,8 @@ const RisksSection = memo(function RisksSection({
       r.status === "OPEN"
         ? "MITIGATING"
         : r.status === "MITIGATING"
-        ? "CLOSED"
-        : "OPEN";
+          ? "CLOSED"
+          : "OPEN";
     const prev = risks;
     setRisks((p) => p.map((x) => (x.id === r.id ? { ...x, status: next } : x)));
     try {
@@ -941,8 +1109,8 @@ const RisksSection = memo(function RisksSection({
                     r.status === "CLOSED"
                       ? "outline"
                       : r.status === "MITIGATING"
-                      ? "secondary"
-                      : "default"
+                        ? "secondary"
+                        : "default"
                   }
                 >
                   {r.status}

@@ -20,37 +20,32 @@ function toLocalIso(input?: string | Date | null): string | undefined {
 // 캐시 무효화용 공통 GET
 async function fetchOverviewFresh(projectId: number): Promise<ProjectOverviewDto> {
   const { data } = await http.get(`/projects/${projectId}/overview`, {
-    params: { t: Date.now() }, // ⚡ 캐시 무효화
+    params: { t: Date.now() },
   });
   return data;
 }
 
 export async function getOverview(projectId: number): Promise<ProjectOverviewDto> {
-  // 초깃값도 신선하게
   return fetchOverviewFresh(projectId);
 }
 
 export async function saveOverview(projectId: number, markdown: string): Promise<ProjectOverviewDto> {
   await http.put(`/projects/${projectId}/overview`, { markdown });
-  // 저장 후 최신본 재조회
   return fetchOverviewFresh(projectId);
 }
 
 export async function submitOverviewProposal(projectId: number, markdown: string): Promise<ProjectOverviewDto> {
   await http.post(`/projects/${projectId}/overview/submit`, { markdown });
-  // 제출 후 최신본 재조회
   return fetchOverviewFresh(projectId);
 }
 
 export async function approveOverviewProposal(projectId: number): Promise<ProjectOverviewDto> {
   await http.post(`/projects/${projectId}/overview/approve`, {});
-  // 승인 후 최신본 재조회
   return fetchOverviewFresh(projectId);
 }
 
 export async function rejectOverviewProposal(projectId: number): Promise<ProjectOverviewDto> {
   await http.post(`/projects/${projectId}/overview/reject`, {});
-  // 반려 후 최신본 재조회
   return fetchOverviewFresh(projectId);
 }
 
@@ -68,6 +63,26 @@ export async function createDoc(
 }
 export async function deleteDoc(docId: number): Promise<void> {
   await http.delete(`/documents/${docId}`);
+}
+
+/** 로컬 서버에 직접 업로드 (multipart/form-data) */
+export async function uploadLocalFile(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<{ objectUrl?: string; url?: string; filename?: string; size?: number; contentType?: string; key?: string }> {
+  const form = new FormData();
+  form.append("file", file);
+
+  // ⚠️ Content-Type 수동 지정 금지 (브라우저가 boundary 자동 설정)
+  const { data } = await http.post(`/uploads`, form, {
+    onUploadProgress: (evt) => {
+      if (!onProgress || !evt.total) return;
+      const pct = Math.round((evt.loaded / evt.total) * 100);
+      onProgress(pct);
+    },
+  });
+
+  return data ?? {};
 }
 
 /* -------- Risks -------- */
