@@ -6,18 +6,21 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.ProjectRepository;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.TeamMemberRepository;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.ProjectDocumentService;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.service.StorageService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
-import org.hibernate.Hibernate; // LAZY 프록시 체크용
+import org.hibernate.Hibernate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -26,6 +29,7 @@ public class ProjectDocumentController {
     private final ProjectDocumentService service;
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
+    private final StorageService storageService;
 
     @PersistenceContext
     private EntityManager em;
@@ -51,10 +55,25 @@ public class ProjectDocumentController {
         return teamMemberRepository.existsByTeam_IdAndUser_Id(p.getTeam().getId(), userId);
     }
 
-    private boolean canViewProject(Long projectId, Authentication auth) {
-        // 교수/관리자는 멤버가 아니어도 열람 가능
-        if (hasRole(auth, "PROFESSOR") || hasRole(auth, "ADMIN")) return true;
+    private boolean isAssignedProfessor(Long projectId, Long userId) {
+        var p = projectRepository.findById(projectId).orElse(null);
+        if (p == null || p.getProfessor() == null) return false;
+        return p.getProfessor().getId().equals(userId);
+    }
+
+    /** 파일 편집 권한: 팀 멤버 OR (담당 교수) OR 관리자 */
+    private boolean canEditFiles(Long projectId, Authentication auth) {
+        if (hasRole(auth, "ADMIN")) return true;
         UserAccount ua = ensureUser(auth);
+        if (hasRole(auth, "PROFESSOR") && isAssignedProfessor(projectId, ua.getId())) return true;
+        return isProjectMember(projectId, ua.getId());
+    }
+
+    /** 보기 권한: 팀 멤버 OR (담당 교수) OR 관리자 */
+    private boolean canViewProject(Long projectId, Authentication auth) {
+        if (hasRole(auth, "ADMIN")) return true;
+        UserAccount ua = ensureUser(auth);
+        if (hasRole(auth, "PROFESSOR") && isAssignedProfessor(projectId, ua.getId())) return true;
         return isProjectMember(projectId, ua.getId());
     }
 
@@ -62,8 +81,8 @@ public class ProjectDocumentController {
         ProjectDocumentDto.SimpleUser byDto = null;
         UserAccount by = d.getCreatedBy();
         if (by != null) {
-            Long id = by.getId(); // 식별자는 프록시 초기화 없이 접근 가능
-            String name = Hibernate.isInitialized(by) ? by.getName() : null; // 세션 없으면 name 접근 안 함
+            Long id = by.getId();
+            String name = Hibernate.isInitialized(by) ? by.getName() : null;
             byDto = new ProjectDocumentDto.SimpleUser(id, name);
         }
         return new ProjectDocumentDto(
@@ -77,8 +96,8 @@ public class ProjectDocumentController {
         );
     }
 
-    /** 목록 조회: 프로젝트 멤버 or (교수/관리자) */
-    @Transactional(readOnly = true) // 세션을 열어 LAZY 안전하게 접근
+    /** 목록 조회 */
+    @Transactional(readOnly = true)
     @GetMapping("/projects/{projectId}/documents")
     public List<ProjectDocumentDto> list(@PathVariable Long projectId, Authentication auth) {
         ensureUser(auth);
@@ -90,35 +109,97 @@ public class ProjectDocumentController {
 
     public record CreateDocReq(String title, String url, String type) {}
 
-    /** 생성: 프로젝트 멤버만 */
+    /** URL 정규화: 내부 경로(/api/...)는 그대로, 스킴 없는 외부 링크는 https:// 부여 */
+    private String normalizeUrl(String url) {
+        if (url == null) return null;
+        String u = url.trim();
+        if (u.isEmpty()) return u;
+        if (u.startsWith("/")) return u; // 내부 경로 유지
+        if (u.matches("^[a-zA-Z][a-zA-Z0-9+\\.-]*:.*")) return u; // 스킴 존재
+        if (u.startsWith("//")) return "https:" + u;
+        return "https://" + u;
+    }
+
+    /** 서버 유효성 검사: 내부 경로 허용, 그 외 http/https + host 필수 */
+    private boolean isValidUrlAfterNormalize(String u) {
+        if (u == null || u.isBlank()) return false;
+        if (u.startsWith("/")) return true; // 내부 경로
+        try {
+            URI uri = URI.create(u);
+            String scheme = uri.getScheme();
+            if (scheme == null) return false;
+            if (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) return false;
+            if (uri.getHost() == null || uri.getHost().isBlank()) return false;
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 생성: 팀 멤버 OR (담당 교수) OR 관리자 */
     @PostMapping("/projects/{projectId}/documents")
     public ProjectDocumentDto create(@PathVariable Long projectId, @RequestBody CreateDocReq req, Authentication auth) {
-        UserAccount ua = ensureUser(auth);
-        if (!isProjectMember(projectId, ua.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_PROJECT_MEMBER");
+        ensureUser(auth);
+        if (!canEditFiles(projectId, auth)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NO_EDIT_PERMISSION");
         }
         ProjectDocument.Type t;
         try { t = ProjectDocument.Type.valueOf(req.type() == null ? "OTHER" : req.type().toUpperCase()); }
         catch (Exception ignore) { t = ProjectDocument.Type.OTHER; }
-        return map(service.create(projectId, req.title(), req.url(), t, ua));
+
+        String normalized = normalizeUrl(req.url());
+        if (!isValidUrlAfterNormalize(normalized)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "INVALID_URL: http(s)://example.com 형태의 외부 링크 또는 /api/... 내부 경로만 허용됩니다.");
+        }
+
+        UserAccount ua = (UserAccount) auth.getPrincipal();
+        return map(service.create(projectId, req.title(), normalized, t, ua));
     }
 
-    /** 삭제: 프로젝트 멤버만 (docId → projectId 역참조) */
+    /** 삭제: 팀 멤버 OR (담당 교수) OR 관리자 */
     @DeleteMapping("/documents/{docId}")
     public void delete(@PathVariable Long docId, Authentication auth) {
-        UserAccount ua = ensureUser(auth);
+        ensureUser(auth);
         ProjectDocument doc = em.find(ProjectDocument.class, docId);
         if (doc != null) {
-            Long projectId = doc.getProject() != null ? doc.getProject().getId() : null;
-            if (projectId == null || !isProjectMember(projectId, ua.getId())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_PROJECT_MEMBER");
+            Long projectId = (doc.getProject() != null ? doc.getProject().getId() : null);
+            if (projectId == null || !canEditFiles(projectId, auth)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NO_EDIT_PERMISSION");
             }
         }
         service.delete(docId);
     }
 
+    /* ===============================
+     * 프리사인 업로드 초기화
+     * =============================== */
+    public record InitUploadReq(String filename, String contentType, Long size) {}
+    public record PresignResp(String uploadUrl, Map<String, String> headers, String objectUrl, int expiresIn, String key) {}
+
+    /** 업로드 URL 발급: 팀 멤버 OR (담당 교수) OR 관리자 */
+    @PostMapping("/projects/{projectId}/documents/upload-init")
+    public PresignResp initUpload(@PathVariable Long projectId, @RequestBody InitUploadReq req, Authentication auth) {
+        ensureUser(auth);
+        if (!canEditFiles(projectId, auth)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NO_EDIT_PERMISSION");
+        }
+        if (req == null || req.filename() == null || req.filename().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filename is required");
+        }
+
+        var ps = storageService.initPresignedUpload(
+                projectId,
+                (UserAccount) auth.getPrincipal(),
+                req.filename(),
+                req.contentType() == null ? "application/octet-stream" : req.contentType(),
+                req.size() == null ? 0L : req.size()
+        );
+        return new PresignResp(ps.uploadUrl(), ps.headers(), ps.objectUrl(), ps.expiresIn(), ps.key());
+    }
+
     /* =========================================================
-     * 권한 조회: 프론트에서 버튼 가시성/동작 제어용
+     * 권한 조회: 프론트 버튼 가시성/동작 제어용
      * ========================================================= */
     public record ProjectPermissions(
             boolean isMember,
@@ -127,8 +208,8 @@ public class ProjectDocumentController {
             boolean canView,
             boolean canCreateDoc,
             boolean canDeleteDoc,
-            boolean canRequestReview,          // 학생(팀 멤버)만
-            boolean canModerateAssignments     // 교수/관리자
+            boolean canRequestReview,
+            boolean canModerateAssignments
     ) {}
 
     @GetMapping("/projects/{projectId}/me/permissions")
@@ -138,15 +219,18 @@ public class ProjectDocumentController {
         boolean isProfessor = hasRole(auth, "PROFESSOR");
         boolean isAdmin = hasRole(auth, "ADMIN");
         boolean isMember = isProjectMember(projectId, ua.getId());
+        boolean isProfessorOfProject = isProfessor && isAssignedProfessor(projectId, ua.getId());
 
-        boolean canView = isMember || isProfessor || isAdmin;
-        boolean canCreateDoc = isMember; // 문서 생성/삭제는 팀 멤버만
-        boolean canDeleteDoc = isMember;
+        boolean canView = isMember || isProfessorOfProject || isAdmin;
 
-        // 검토요청은 학생(팀 멤버)에게만 보이게
+        // 파일 편집: 팀 멤버 OR (담당 교수) OR 관리자
+        boolean canCreateDoc = isMember || isProfessorOfProject || isAdmin;
+        boolean canDeleteDoc = isMember || isProfessorOfProject || isAdmin;
+
+        // 검토요청은 학생(팀 멤버)에게만
         boolean canRequestReview = isMember && !(isProfessor || isAdmin);
 
-        // 검토 승인/반려 등 상태 변경은 교수/관리자에게
+        // 검토 승인/반려는 교수/관리자
         boolean canModerateAssignments = isProfessor || isAdmin;
 
         return new ProjectPermissions(
