@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -169,6 +170,88 @@ public class ProjectService {
                 upcoming,
                 links
         );
+    }
+
+    /* ===== 신규: 깃허브 링크 업데이트 ===== */
+    @Transactional
+    public ProjectDetailDto updateGithubUrl(Long projectId, String githubUrl, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+        }
+
+        // 권한 규칙:
+        // - ADMIN, PROFESSOR: 항상 허용
+        // - STUDENT: 해당 프로젝트 팀 멤버일 때만 허용
+        if (actor.getRole() == Role.STUDENT) {
+            Project p0 = projectRepository.findByIdWithTeamAndProfessor(projectId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+            boolean isMember = (p0.getTeam() != null) && teamMemberRepository.existsByTeam_IdAndUser_Id(p0.getTeam().getId(), actor.getId());
+            if (!isMember) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_PROJECT_MEMBER");
+        }
+
+        Project p = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+
+        if (githubUrl == null || githubUrl.trim().isEmpty()) {
+            // 링크 제거(초기화)
+            p.setRepoOwner(null);
+            p.setGithubRepo(null);
+        } else {
+            String[] parsed = parseGithubOwnerRepo(githubUrl);
+            String owner = parsed[0];
+            String repo  = parsed[1];
+
+            // 길이 제한: 엔티티 컬럼 길이에 맞춤
+            if (owner.length() > 50 || repo.length() > 100) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_GITHUB_URL");
+            }
+
+            p.setRepoOwner(owner);
+            p.setGithubRepo(repo);
+        }
+
+        // flush는 @Transactional 커밋 시점에 수행
+        // 최신 상세를 반환해 FE가 즉시 반영 가능하게
+        return getProjectDetail(projectId, actor);
+    }
+
+    /** owner/repo 또는 https(s)://github.com/owner/repo(.git) → [owner, repo] */
+    private String[] parseGithubOwnerRepo(String raw) {
+        String s = raw == null ? "" : raw.trim();
+
+        if (s.startsWith("http://") || s.startsWith("https://")) {
+            try {
+                URI u = URI.create(s);
+                String host = Optional.ofNullable(u.getHost()).orElse("");
+                // github.com 또는 서브도메인(.github.com) 허용
+                if (!host.equalsIgnoreCase("github.com") && !host.toLowerCase().endsWith(".github.com")) {
+                    throw new IllegalArgumentException("not github host");
+                }
+                s = Optional.ofNullable(u.getPath()).orElse("");
+            } catch (Exception e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_GITHUB_URL");
+            }
+        }
+
+        // /owner/repo/ → owner/repo
+        s = s.replaceAll("^/+", "").replaceAll("/+$", "");
+        // .git 제거
+        if (s.endsWith(".git")) s = s.substring(0, s.length() - 4);
+
+        String[] parts = s.split("/");
+        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_GITHUB_URL");
+        }
+
+        String owner = parts[0];
+        String repo  = parts[1];
+
+        // 간단 유효성(문자 제한: 깃허브의 일반 패턴에 맞춤)
+        if (!owner.matches("[A-Za-z0-9-_.]+") || !repo.matches("[A-Za-z0-9-_.]+")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_GITHUB_URL");
+        }
+
+        return new String[]{owner, repo};
     }
 
     /* ===== 내부 매핑: 목록 카드 ===== */

@@ -56,6 +56,17 @@ public class ProjectController {
         return projectService.listProjectsByProfessor(ua.getId());
     }
 
+    /** 깃허브 링크(소유자/레포) 업데이트: 관리자/교수는 제한 없이, 학생은 해당 프로젝트 멤버일 때만 */
+    public record RepoUpdateRequest(String githubUrl) {}
+
+    @PutMapping("/projects/{id}/repo")
+    @Transactional
+    public ProjectDetailDto updateRepo(@PathVariable Long id, @RequestBody RepoUpdateRequest body, Authentication auth) {
+        UserAccount ua = ensureUser(auth);
+        String url = body == null ? null : body.githubUrl();
+        return projectService.updateGithubUrl(id, url, ua);
+    }
+
     private UserAccount ensureUser(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");

@@ -9,8 +9,10 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.service.ProjectDocum
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate; // LAZY 프록시 체크용
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -57,7 +59,13 @@ public class ProjectDocumentController {
     }
 
     private ProjectDocumentDto map(ProjectDocument d) {
-        var by = d.getCreatedBy() == null ? null : new ProjectDocumentDto.SimpleUser(d.getCreatedBy().getId(), d.getCreatedBy().getName());
+        ProjectDocumentDto.SimpleUser byDto = null;
+        UserAccount by = d.getCreatedBy();
+        if (by != null) {
+            Long id = by.getId(); // 식별자는 프록시 초기화 없이 접근 가능
+            String name = Hibernate.isInitialized(by) ? by.getName() : null; // 세션 없으면 name 접근 안 함
+            byDto = new ProjectDocumentDto.SimpleUser(id, name);
+        }
         return new ProjectDocumentDto(
                 d.getId(),
                 d.getProject().getId(),
@@ -65,11 +73,12 @@ public class ProjectDocumentController {
                 d.getUrl(),
                 d.getType().name(),
                 d.getCreatedAt() == null ? null : d.getCreatedAt().format(ISO),
-                by
+                byDto
         );
     }
 
     /** 목록 조회: 프로젝트 멤버 or (교수/관리자) */
+    @Transactional(readOnly = true) // 세션을 열어 LAZY 안전하게 접근
     @GetMapping("/projects/{projectId}/documents")
     public List<ProjectDocumentDto> list(@PathVariable Long projectId, Authentication auth) {
         ensureUser(auth);
