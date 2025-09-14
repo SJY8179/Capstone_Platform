@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { getProjectDetail } from "@/api/projects";
+import { getProjectDetail, updateProjectRepo } from "@/api/projects";
 import type { ProjectDetailDto, ProjectOverviewDto } from "@/types/domain";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -197,6 +197,12 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
   // ⬇개요서 버전/펜딩 유무가 바뀌면 섹션을 리마운트하여 로컬 상태 초기화
   const overviewKey = `${overview?.version ?? 0}-${overview?.pendingMarkdown ? 1 : 0}`;
 
+  // 깃허브 링크 저장 핸들러 (저장 후 최신 상세 반영)
+  const handleSaveRepo = async (githubUrl: string | null) => {
+    const updated = await updateProjectRepo(projectId, githubUrl);
+    setData(updated);
+  };
+
   return (
     <div className="space-y-6 min-w-0">
       {/* 헤더 */}
@@ -272,7 +278,14 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
         </TabsContent>
 
         <TabsContent value="work" className="mt-4">
-          <WorkSection tasks={tasks} events={events} links={links} />
+          <WorkSection
+            projectId={projectId}
+            tasks={tasks}
+            events={events}
+            links={links}
+            repoUrl={data.repo?.url ?? null}
+            onSaveRepo={handleSaveRepo}
+          />
         </TabsContent>
 
         <TabsContent value="risks" className="mt-4">
@@ -485,16 +498,49 @@ const OverviewSection = memo(function OverviewSection({
   );
 });
 
-/** 작업/일정/링크(보기용) */
+/** 작업/일정/링크 + 깃허브 링크 편집 */
 const WorkSection = memo(function WorkSection({
+  projectId,
   tasks,
   events,
   links,
+  repoUrl,
+  onSaveRepo,
 }: {
+  projectId: number;
   tasks: ProjectDetailDto["tasks"];
   events: ProjectDetailDto["upcomingEvents"];
   links: ProjectDetailDto["links"];
+  repoUrl: string | null;
+  onSaveRepo: (githubUrl: string | null) => Promise<void> | void;
 }) {
+  const [githubInput, setGithubInput] = useState<string>(repoUrl ?? "");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setGithubInput(repoUrl ?? "");
+  }, [repoUrl]);
+
+  const saveRepo = async () => {
+    setBusy(true);
+    try {
+      const v = githubInput.trim();
+      await onSaveRepo(v.length > 0 ? v : null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearRepo = async () => {
+    setBusy(true);
+    try {
+      await onSaveRepo(null);
+      setGithubInput("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="grid md:grid-cols-2 gap-6 min-w-0">
       <Card>
@@ -580,6 +626,32 @@ const WorkSection = memo(function WorkSection({
                 </a>
               ))}
             </div>
+          </div>
+
+          <Separator />
+
+          {/* 깃허브 링크 편집 (모든 사용자 가능) */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <GitBranch className="h-4 w-4" />
+              깃허브 링크 편집
+            </p>
+            <div className="grid md:grid-cols-[1fr_auto_auto] gap-2">
+              <Input
+                placeholder="owner/repo 또는 https://github.com/owner/repo"
+                value={githubInput}
+                onChange={(e) => setGithubInput(e.target.value)}
+              />
+              <Button onClick={saveRepo} disabled={busy}>
+                저장
+              </Button>
+              <Button variant="secondary" onClick={clearRepo} disabled={busy}>
+                제거
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              예) <code>openai/openai-cookbook</code> 또는 <code>https://github.com/openai/openai-cookbook</code>
+            </p>
           </div>
         </CardContent>
       </Card>

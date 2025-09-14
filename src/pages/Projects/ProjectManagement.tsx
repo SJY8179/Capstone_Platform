@@ -10,8 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, FileText, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
 } from "lucide-react";
-import type { UserRole, User } from "@/types/user";
-import { listProjects } from "@/api/projects";
+import type { UserRole } from "@/types/user";
+import { listProjects, getProjectDetail } from "@/api/projects"; // ⬅️ 상세 조회로 repo.url 확인
 import type { ProjectListDto, ProjectStatus } from "@/types/domain";
 import { useAuth } from "@/stores/auth";
 import {
@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { toast } from "sonner"; // 안내 토스트
 import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
 import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
 
@@ -95,9 +96,27 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     });
 
     return sorted.filter(byTab).filter(bySearch);
-
-
   }, [projects, searchQuery, tab]);
+
+  /** 🔗 GitHub 버튼: 링크가 있으면 새 탭, 없으면 안내 토스트 */
+  const openGithub = async (projectId: number) => {
+    try {
+      const detail = await getProjectDetail(projectId);
+      const url = detail?.repo?.url ?? null;
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        toast("깃허브 링크가 등록되어 있지 않습니다.", {
+          description:
+            "프로젝트 상세 > 작업 탭에서 깃허브 링크를 저장하면 여기서 바로 이동할 수 있어요.",
+        });
+      }
+    } catch {
+      toast("깃허브 링크 확인에 실패했어요.", {
+        description: "잠시 후 다시 시도해 주세요.",
+      });
+    }
+  };
 
   const renderActions = (p: ProjectListDto) => {
     if (userRole === "student") {
@@ -112,7 +131,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <FileText className="h-4 w-4 mr-1" />
             보고서 작성
           </Button>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
             <GitBranch className="h-4 w-4 mr-1" />
             GitHub
           </Button>
@@ -125,6 +144,10 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
             <Eye className="h-4 w-4 mr-1" />
             열람
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
+            <GitBranch className="h-4 w-4 mr-1" />
+            GitHub
           </Button>
           <Button
             size="sm"
@@ -143,6 +166,10 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
           <Eye className="h-4 w-4 mr-1" />
           열람
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
+          <GitBranch className="h-4 w-4 mr-1" />
+          GitHub
         </Button>
         <Button size="sm" variant="outline">
           <Edit className="h-4 w-4 mr-1" />
@@ -333,7 +360,5 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         </DialogContent>
       </Dialog>
     </div>
-
-
   );
 }

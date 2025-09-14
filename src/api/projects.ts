@@ -333,3 +333,12 @@ export async function getProjectDetail(projectId: number): Promise<ProjectDetail
   const { data } = await http.get(`/projects/${projectId}`);
   return normalizeProjectDetail(data);
 }
+
+/** 🔧 깃허브 링크 업데이트 (저장/제거) */
+export async function updateProjectRepo(
+  projectId: number,
+  githubUrl: string | null
+): Promise<ProjectDetailDto> {
+  const { data } = await http.put(`/projects/${projectId}/repo`, { githubUrl });
+  return normalizeProjectDetail(data);
+}
