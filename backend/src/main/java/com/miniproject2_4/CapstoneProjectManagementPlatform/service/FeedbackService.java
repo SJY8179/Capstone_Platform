@@ -1,6 +1,7 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.FeedbackDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.CursorPage;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Feedback;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Project;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
@@ -8,6 +9,7 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.FeedbackR
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.ProjectRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,20 @@ public class FeedbackService {
                 .limit(safeLimit)
                 .map(FeedbackService::toDto)
                 .toList();
+    }
+
+    public CursorPage<FeedbackDto> page(Long projectId, Long beforeId, int limit) {
+        int safeLimit = Math.max(1, limit);
+        var rows = feedbackRepository.findPageWithAuthor(
+                projectId,
+                beforeId,
+                PageRequest.of(0, safeLimit)
+        );
+        var items = rows.stream().map(FeedbackService::toDto).toList();
+        Long nextCursor = (rows.size() == safeLimit)
+                ? rows.get(rows.size() - 1).getId()
+                : null;
+        return new CursorPage<>(items, nextCursor);
     }
 
     @Transactional

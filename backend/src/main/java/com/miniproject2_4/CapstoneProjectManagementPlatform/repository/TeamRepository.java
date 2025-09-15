@@ -7,6 +7,11 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * Team 리포지토리 (통합 버전)
+ * - 내가 팀 멤버로 속한 팀 조회 (native)
+ * - 내가 담당 교수로 지정된 프로젝트의 팀 조회 (JPQL)
+ */
 public interface TeamRepository extends JpaRepository<Team, Long> {
 
     /** 내가 '팀 멤버'로 속한 팀 */

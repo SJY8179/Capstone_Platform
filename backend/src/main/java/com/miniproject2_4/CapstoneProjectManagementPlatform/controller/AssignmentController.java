@@ -64,10 +64,7 @@ public class AssignmentController {
         assignmentService.delete(projectId, id);
     }
 
-    /** POST /api/projects/{projectId}/assignments/status-bulk
-     * 같은 프로젝트에 속한 과제들에 한해 일괄 상태 변경.
-     * 잘못된 ID(다른 프로젝트 소속)는 조용히 무시합니다.
-     */
+    /** POST /api/projects/{projectId}/assignments/status-bulk */
     @PostMapping("/status-bulk")
     @Transactional
     public void bulkChange(@PathVariable Long projectId, @RequestBody BulkReq req) {
@@ -82,12 +79,7 @@ public class AssignmentController {
         }
     }
 
-    /** PATCH /api/projects/{projectId}/assignments/{id}/request-review
-     * 학생(팀 구성원)이 검토 요청: ONGOING -> PENDING
-     * - userId 취득 방식은 프로젝트 환경에 따라 다를 수 있어,
-     *   우선 선택 헤더(X-USER-ID)를 지원하고(null이면 권한검사 생략).
-     *   보안 강화를 원하면 SecurityContext로 대체하세요.
-     */
+    /** PATCH /api/projects/{projectId}/assignments/{id}/request-review */
     @PatchMapping("/{id}/request-review")
     public AssignmentDto requestReview(@PathVariable Long projectId,
                                        @PathVariable Long id,

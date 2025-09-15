@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectDetailDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
@@ -33,6 +34,14 @@ public class ProjectController {
         return projectService.listProjectsForUser(ua);
     }
 
+    /** 단건 상세: /api/projects/{id} */
+    @GetMapping("/projects/{id}")
+    @Transactional(readOnly = true)
+    public ProjectDetailDto getOne(@PathVariable Long id, Authentication auth) {
+        UserAccount ua = ensureUser(auth);
+        return projectService.getProjectDetail(id, ua);
+    }
+
     /** (옵션) 교수 전용: 담당 프로젝트 목록 — 프론트 폴백에서 호출 가능 */
     @GetMapping("/projects/teaching")
     @Transactional(readOnly = true)
@@ -45,6 +54,17 @@ public class ProjectController {
             return List.of(); // 학생이면 빈 배열
         }
         return projectService.listProjectsByProfessor(ua.getId());
+    }
+
+    /** 깃허브 링크(소유자/레포) 업데이트: 관리자/교수는 제한 없이, 학생은 해당 프로젝트 멤버일 때만 */
+    public record RepoUpdateRequest(String githubUrl) {}
+
+    @PutMapping("/projects/{id}/repo")
+    @Transactional
+    public ProjectDetailDto updateRepo(@PathVariable Long id, @RequestBody RepoUpdateRequest body, Authentication auth) {
+        UserAccount ua = ensureUser(auth);
+        String url = body == null ? null : body.githubUrl();
+        return projectService.updateGithubUrl(id, url, ua);
     }
 
     private UserAccount ensureUser(Authentication auth) {

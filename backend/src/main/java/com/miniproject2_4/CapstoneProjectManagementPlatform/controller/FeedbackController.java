@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.CursorPage;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.FeedbackDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.FeedbackRequests;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
@@ -37,6 +38,16 @@ public class FeedbackController {
                                                   Authentication auth) {
         projectAccessGuard.assertCanViewProject(projectId, currentUser(auth));
         return ResponseEntity.ok(feedbackService.list(projectId, limit));
+    }
+
+    /** 커서 페이지 조회 (보기 권한 필요) */
+    @GetMapping("/feedback/page")
+    public ResponseEntity<CursorPage<FeedbackDto>> page(@PathVariable Long projectId,
+                                                        @RequestParam(name = "beforeId", required = false) Long beforeId,
+                                                        @RequestParam(name = "limit", defaultValue = "10") int limit,
+                                                        Authentication auth) {
+        projectAccessGuard.assertCanViewProject(projectId, currentUser(auth));
+        return ResponseEntity.ok(feedbackService.page(projectId, beforeId, limit));
     }
 
     /** 생성 (ADMIN 또는 담당 교수) */
