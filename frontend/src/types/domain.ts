@@ -1,3 +1,5 @@
+// === path : src/types/domain.ts
+
 /** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
@@ -110,6 +112,15 @@ export interface TeamListDto {
   };
   createdAt?: string | null;
   lastActivity?: string | null;
+}
+
+/** ✅ 공용 사용자 DTO (Invite 모달 등에서 사용) */
+export interface UserDto {
+  id: number;
+  name: string;
+  email: string;
+  avatar?: string | null;
+  avatarUrl?: string | null;
 }
 
 /** 피드백 (서버 정식 DTO와 1:1) */

@@ -1,4 +1,5 @@
-﻿import { useState, useEffect } from "react";
+﻿// === path : src/App.tsx
+import { useState, useEffect } from "react";
 import { LoginForm } from "@/components/Auth/LoginForm";
 import { Sidebar } from "@/components/Layout/Sidebar";
 import { Header } from "@/components/Layout/Header";
@@ -11,6 +12,8 @@ import { EvaluationSystem } from "@/pages/Evaluation/EvaluationSystem";
 import { UserManagement } from "@/pages/Admin/UserManagement";
 import { ScheduleManagement } from "@/pages/Schedule/ScheduleManagement";
 import ProjectAssignments from "@/pages/Projects/Assignments";
+import { NotificationCenter } from "@/components/Notifications/NotificationCenter";
+import { SettingsPage } from "@/components/Settings/SettingsPage";
 import { http } from "@/api/http";
 import { Toaster } from "@/components/ui/sonner";
 import type { User } from "@/types/user";
@@ -30,7 +33,8 @@ export type ActivePage =
   | "users"
   | "schedule"
   | "assignments"
-  | "settings";
+  | "notifications"   // ✅ 추가
+  | "settings";       // ✅ 유지
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -235,6 +239,19 @@ export default function App() {
       case "assignments":
         return <ProjectAssignments projectId={activeProjectId!} />;
 
+      case "notifications": // ✅ 공지/메시지
+        return <NotificationCenter userRole={currentUser.role} />;
+
+      case "settings": // ✅ 설정
+        return (
+          <SettingsPage
+            userRole={currentUser.role}
+            currentUser={currentUser}
+            appSettings={appSettings}
+            onSettingsChange={updateAppSettings}
+          />
+        );
+
       default:
         return <div>페이지를 찾을 수 없습니다.</div>;
     }
@@ -258,8 +275,8 @@ export default function App() {
           user={currentUser}
           onLogout={handleLogout}
           activeProjectId={activeProjectId}
-          onChangeActiveProject={setActiveProjectId}
-          // (필요하면 Settings 페이지에서 updateAppSettings 전달)
+          onChangeActiveProject={(id) => setActiveProjectId(id)}
+          onNotificationClick={() => setActivePage("notifications")} // 헤더 드롭다운 → 알림 센터로 이동
         />
         <main className="flex-1 overflow-auto p-6">{renderMainContent()}</main>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -6,12 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Search, Plus, Users, UserPlus, Settings, MessageSquare,
-  CalendarDays, GitBranch, CheckCircle2,
+  Search, Plus, Users, UserPlus, Settings as SettingsIcon,
+  MessageSquare, CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
 import { listTeams, listTeachingTeams } from "@/api/teams";
-import type { TeamListDto } from "@/types/domain";
+import type { TeamListDto, UserDto } from "@/types/domain";
+import { CreateTeamModal } from "@/components/Teams/CreateTeamModal";
+import { InviteMemberModal } from "@/components/Teams/InviteMemberModal";
+import { TeamSettingsModal } from "@/components/Teams/TeamSettingsModal";
+import { listInvitableUsers } from "@/types/user";
 
 interface TeamManagementProps {
   userRole: UserRole;
@@ -31,7 +35,6 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
   }, [userRole]);
 
   if (userRole === "admin") {
-    // 혹시 브라우저가 막히는 경우를 대비해 버튼도 제공
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -51,28 +54,34 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        let data: TeamListDto[] = [];
-        if (userRole === "professor") {
-          // 교수: 담당 프로젝트의 팀
-          data = await listTeachingTeams();
-          // 담당 프로젝트가 없고, 본인이 팀 멤버인 팀도 보고 싶다면 아래 주석 해제
-          // if (data.length === 0) data = await listTeams();
-        } else {
-          // 학생: 내가 속한 팀
-          data = await listTeams();
-        }
-        setTeams(data ?? []);
-      } catch {
-        setTeams([]);
-      } finally {
-        setLoading(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<TeamListDto | null>(null);
+
+  const [users, setUsers] = useState<UserDto[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const loadTeams = useCallback(async () => {
+    try {
+      setLoading(true);
+      let data: TeamListDto[] = [];
+      if (userRole === "professor") {
+        data = await listTeachingTeams();
+      } else {
+        data = await listTeams();
       }
-    })();
+      setTeams(data ?? []);
+    } catch {
+      setTeams([]);
+    } finally {
+      setLoading(false);
+    }
   }, [userRole]);
+
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
@@ -84,30 +93,58 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     );
   }, [teams, q]);
 
-  const actions = (
-    <>
-      {userRole === "student" && (
-        <>
-          <Button size="sm" variant="outline">
-            <UserPlus className="h-4 w-4 mr-1" /> 팀원 초대
-          </Button>
-          <Button size="sm" variant="outline">
-            <Settings className="h-4 w-4 mr-1" /> 팀 설정
-          </Button>
-        </>
-      )}
-      {userRole === "professor" && (
-        <>
-          <Button size="sm" variant="outline">
-            <MessageSquare className="h-4 w-4 mr-1" /> 피드백
-          </Button>
-          <Button size="sm" variant="outline">
-            <CalendarDays className="h-4 w-4 mr-1" /> 일정 관리
-          </Button>
-        </>
-      )}
-    </>
-  );
+  async function loadUsersForInvite(teamId: number) {
+    setLoadingUsers(true);
+    try {
+      const list = await listInvitableUsers(teamId);
+      setUsers(list ?? []);
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }
+
+  const openInvite = async (team: TeamListDto) => {
+    setSelectedTeam(team);
+    setShowInviteModal(true);
+    await loadUsersForInvite(team.id);
+  };
+
+  const openSettings = (team: TeamListDto) => {
+    setSelectedTeam(team);
+    setShowSettingsModal(true);
+  };
+
+  const handleInviteSuccess = (teamId: number, newUser: UserDto) => {
+    setTeams((prev) =>
+      prev.map((t) =>
+        t.id === teamId
+          ? {
+              ...t,
+              members: [
+                ...t.members,
+                {
+                  id: newUser.id,
+                  name: newUser.name,
+                  email: newUser.email,
+                  role: "member",
+                  status: "active",
+                },
+              ],
+            }
+          : t
+      )
+    );
+  };
+
+  const handleTeamUpdate = (updated: TeamListDto) => {
+    setTeams((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  };
+
+  const handleTeamDelete = (teamId: number) => {
+    setTeams((prev) => prev.filter((t) => t.id !== teamId));
+  };
 
   if (loading) return <div>Loading...</div>;
 
@@ -120,7 +157,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <p className="text-muted-foreground">팀을 구성하고 협업을 진행하세요.</p>
         </div>
         {userRole === "student" && (
-          <Button>
+          <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" /> 새 팀 생성
           </Button>
         )}
@@ -150,7 +187,30 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                   </CardTitle>
                   <CardDescription>{t.description ?? "팀 소개가 없습니다."}</CardDescription>
                 </div>
-                <div className="flex gap-2">{actions}</div>
+
+                {/* 카드별 액션 */}
+                <div className="flex gap-2">
+                  {userRole === "student" && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => openInvite(t)}>
+                        <UserPlus className="h-4 w-4 mr-1" /> 팀원 초대
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openSettings(t)}>
+                        <SettingsIcon className="h-4 w-4 mr-1" /> 팀 설정
+                      </Button>
+                    </>
+                  )}
+                  {userRole === "professor" && (
+                    <>
+                      <Button size="sm" variant="outline">
+                        <MessageSquare className="h-4 w-4 mr-1" /> 피드백
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <CalendarDays className="h-4 w-4 mr-1" /> 일정 관리
+                      </Button>
+                    </>
+                  )}
+                </div>
               </CardHeader>
 
               <CardContent className="space-y-4">
@@ -224,6 +284,33 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <div className="text-center text-muted-foreground py-12">표시할 팀이 없습니다.</div>
         )}
       </div>
+
+      {/* 모달들 */}
+      <CreateTeamModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreateSuccess={(newTeam) => {
+          setTeams((prev) => [newTeam, ...prev]);
+        }}
+      />
+
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        team={selectedTeam}
+        users={users}
+        isLoading={loadingUsers}
+        onInviteSuccess={handleInviteSuccess}
+      />
+
+      <TeamSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        team={selectedTeam}
+        onTeamUpdate={handleTeamUpdate}
+        onTeamDelete={handleTeamDelete}
+        onRefreshNeeded={loadTeams}
+      />
     </div>
   );
 }

@@ -35,16 +35,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String ctx = request.getContextPath(); // e.g. "/api"
-        String path = request.getRequestURI(); // e.g. "/api/..."
-        String rel  = path.startsWith(ctx) ? path.substring(ctx.length()) : path;
 
-        // 로그인/회원가입/리프레시/프리플라이트는 필터 패스
+        final String uri = request.getRequestURI();
+
+        // 로그인/회원가입/리프레시/프리플라이트/헬스체크/에러 페이지 등은 필터 패스
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())
-                || rel.equals("/auth/login")
-                || rel.equals("/auth/register")
-                || rel.equals("/auth/signup")
-                || rel.equals("/auth/refresh")) {
+                || uri.endsWith("/auth/login")
+                || uri.endsWith("/auth/register")
+                || uri.endsWith("/auth/signup")
+                || uri.endsWith("/auth/refresh")
+                || uri.startsWith("/actuator/")
+                || "/error".equals(uri)) {
             chain.doFilter(request, response);
             return;
         }

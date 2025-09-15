@@ -1,4 +1,3 @@
-// sidebar.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Home,
@@ -18,7 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { ActivePage } from "../../App";
+import type { ActivePage } from "@/App";
 import type { UserRole } from "@/types/user";
 import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type { ScheduleDto, SchedulePriority, ScheduleType } from "@/types/domain";
@@ -314,9 +313,9 @@ export function Sidebar({
 
             {/* 공지/메시지 (뱃지 포함) */}
             <Button
-              variant={activePage === ("notifications" as ActivePage) ? "secondary" : "ghost"}
+              variant={activePage === "notifications" ? "secondary" : "ghost"}
               className={`w-full ${collapsed ? "justify-center px-2" : "justify-start gap-3"}`}
-              onClick={() => onPageChange("notifications" as ActivePage)}
+              onClick={() => onPageChange("notifications")}
               title={collapsed ? "공지/메시지" : undefined}
             >
               <MessageSquare className="h-4 w-4 flex-shrink-0" />

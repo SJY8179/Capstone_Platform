@@ -10,10 +10,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,8 +24,6 @@ public class TeamService {
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
-
-    private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     /** (관리자) 전체 팀: /api/teams */
     public List<TeamListDto.Response> listTeams() {
@@ -63,29 +58,47 @@ public class TeamService {
                 .toList();
     }
 
-    /** /api/teams **/ @Transactional
+    /** 팀 생성: 새 팀 + (필요 시) 새 프로젝트 자동 생성 */
+    @Transactional
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
         UserAccount creator = findUserById(userId);
 
+        // 1) 팀 생성
         Team newTeam = Team.builder()
                 .name(request.name())
                 .description(request.description())
                 .build();
         teamRepository.save(newTeam);
 
+        // 2) 생성자를 팀장으로 추가
         TeamMemberId teamMemberId = new TeamMemberId(newTeam.getId(), creator.getId());
         TeamMember creatorAsLeader = TeamMember.builder()
                 .id(teamMemberId)
                 .team(newTeam)
                 .user(creator)
-                .roleInTeam("LEADER")
+                .roleInTeam(TeamRole.LEADER.name())
                 .build();
         teamMemberRepository.save(creatorAsLeader);
 
+        // 3) 프로젝트 자동 생성
+        //    - 생성자가 교수면 담당 교수로 지정
+        //    - 그 외(학생/조교/관리자)는 NULL로 두어 DB 트리거 충돌 방지
+        UserAccount professor = (creator.getRole() == Role.PROFESSOR) ? creator : null;
+
+        Project newProject = Project.builder()
+                .team(newTeam)
+                .professor(professor) // null 허용
+                .title((request.name() != null && !request.name().isBlank()) ? request.name() : "새 프로젝트")
+                .status(Project.Status.ACTIVE)
+                .build();
+        projectRepository.save(newProject);
+
+        // 4) 응답 매핑
         return convertToDto(newTeam);
     }
 
-    /** /api/teams/{teamId}/members **/ @Transactional
+    /** /api/teams/{teamId}/members **/
+    @Transactional
     public void addMember(Long teamId, Long userId, Long requesterId) {
         checkMemberPermission(teamId, requesterId);
 
@@ -101,7 +114,7 @@ public class TeamService {
                 .id(teamMemberId)
                 .team(team)
                 .user(user)
-                .roleInTeam("MEMBER")
+                .roleInTeam(TeamRole.MEMBER.name())
                 .build();
 
         teamMemberRepository.save(newTeamMember);
@@ -143,7 +156,8 @@ public class TeamService {
     public void deleteTeam(Long teamId, Long requesterId) {
         checkLeaderPermission(teamId, requesterId);
 
-        if (projectRepository.findByTeam_Id(teamId).isPresent()) {
+        // 프로젝트 연결 여부 확인 (연결되어 있으면 삭제 불가)
+        if (resolveProjectForTeam(teamId) != null) {
             throw new IllegalStateException("프로젝트에 할당된 팀은 삭제할 수 없습니다.");
         }
         teamMemberRepository.deleteByTeamId(teamId);
@@ -176,22 +190,19 @@ public class TeamService {
         }
     }
 
-    /** Team → TeamListDto.Response 변환 (팀원 구현 구조 유지) */
+    /** Team → TeamListDto.Response 변환 (NonUniqueResult 안전 버전) */
     private TeamListDto.Response convertToDto(Team team) {
-        // 프로젝트명 조회
-        String projectTitle = projectRepository.findByTeam_Id(team.getId())
-                .map(Project::getTitle)
-                .orElse("미배정 프로젝트");
+        // 같은 팀에 연결된 "대표" 프로젝트 선택 (중복 존재 시 가장 최근 id)
+        Project project = resolveProjectForTeam(team.getId());
+
+        String projectTitle = (project != null) ? project.getTitle() : "미배정 프로젝트";
+        Long projectId = (project != null) ? project.getId() : null;
 
         // 팀 멤버 전체 조회
         List<TeamMember> teamMembers = teamMemberRepository.findWithUserByTeamId(team.getId());
         if (teamMembers == null) teamMembers = Collections.emptyList();
 
         // 통계(회의/과제) 조회
-        Long projectId = projectRepository.findByTeam_Id(team.getId())
-                .map(Project::getId)
-                .orElse(null);
-
         int meetings = 0;
         int totalTasks = 0;
         int completedTasks = 0;
@@ -212,6 +223,14 @@ public class TeamService {
         );
 
         return TeamListDto.Response.from(team, teamMembers, projectTitle, stats);
+    }
+
+    /**
+     * 같은 팀에 연결된 프로젝트가 여러 개여도 예외 없이 하나만 선택.
+     * 우선순위: 생성일 내림차순(가장 최근).
+     */
+    private Project resolveProjectForTeam(Long teamId) {
+        return projectRepository.findTopByTeam_IdOrderByCreatedAtDesc(teamId).orElse(null);
     }
 
     private UserAccount findUserById(Long userId) {

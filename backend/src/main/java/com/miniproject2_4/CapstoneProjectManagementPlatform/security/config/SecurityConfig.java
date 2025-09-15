@@ -39,7 +39,6 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 공개 허용(로그인 없이 접근 가능)
                         .requestMatchers(
                                 "/auth/**",
                                 "/actuator/health/**",
@@ -48,18 +47,10 @@ public class SecurityConfig {
                                 "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/").permitAll()
-
-                        // 파일 열람: 컨텍스트 경로(/api)는 자동으로 빠지므로 '/files'로 매칭합니다.
                         .requestMatchers(HttpMethod.GET, "/files", "/files/**").permitAll()
-
-                        // 업로드 관련: 명시적으로 표시 (없어도 anyRequest().authenticated()에 걸림)
                         .requestMatchers(HttpMethod.POST, "/uploads").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/uploads/put/**").authenticated()
-
-                        // 프리플라이트(OPTIONS) 관대하게 허용 (개발 편의)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(eh -> eh.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -80,16 +71,7 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
-
-        // 파일 다운로드 시 클라이언트에서 읽을 수 있으면 편한 헤더들을 노출
-        config.setExposedHeaders(List.of(
-                "Content-Disposition",
-                "Accept-Ranges",
-                "Content-Range"
-        ));
-        // 필요하다면 개발 편의용 캐시 시간
-        // config.setMaxAge(3600L);
-
+        config.setExposedHeaders(List.of("Content-Disposition","Accept-Ranges","Content-Range"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

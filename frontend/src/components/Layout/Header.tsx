@@ -1,6 +1,5 @@
-// Header.tsx
 import React, { useMemo, useState, useCallback } from "react";
-import { Search, User as UserIcon, LogOut } from "lucide-react";
+import { Search, User as UserIcon, LogOut, Settings as SettingsIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +43,9 @@ interface HeaderProps {
 
   /** 외부에서 알림을 제어하고 싶다면 전달(미전달 시 내부 데모 상태 사용) */
   notifications?: Notification[];
+
+  /** 설정 페이지 열기 */
+  onOpenSettings?: () => void;
 }
 
 /* =========================================
@@ -126,6 +128,7 @@ export function Header({
   activeProjectId,
   onChangeActiveProject,
   notifications: externalNotifications,
+  onOpenSettings,
 }: HeaderProps) {
   // 알림: 외부 제어(notifications prop) 우선, 없으면 내부 상태 사용
   const [internalNotifications, setInternalNotifications] =
@@ -242,6 +245,13 @@ export function Header({
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onOpenSettings}
+              className="cursor-pointer"
+            >
+              <SettingsIcon className="mr-2 h-4 w-4" />
+              <span>설정</span>
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={onLogout}
               className="text-destructive focus:text-destructive cursor-pointer"

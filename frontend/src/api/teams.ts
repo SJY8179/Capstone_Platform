@@ -1,4 +1,5 @@
-﻿import { http } from "@/api/http";
+﻿// === path : src/api/teams.ts
+import { http } from "@/api/http";
 import type { TeamListDto } from "@/types/domain";
 
 /** (학생/교수/관리자 공통) 내가 팀 멤버로 속한 팀 */
@@ -17,4 +18,39 @@ export async function listTeachingTeams() {
 export async function listAllTeams() {
   const { data } = await http.get<TeamListDto[]>("/teams");
   return data;
+}
+
+/** 새 팀 생성 */
+export async function createTeam(name: string, description?: string) {
+  const { data } = await http.post<TeamListDto>("/teams", { name, description });
+  return data;
+}
+
+/** 팀원 초대/추가 */
+export async function addTeamMember(teamId: number, userId: number) {
+  await http.post(`/teams/${teamId}/members`, { userId });
+}
+
+/** 팀 정보 수정 (서버는 PUT 매핑) */
+export async function updateTeam(teamId: number, name: string, description?: string) {
+  const { data } = await http.put<TeamListDto>(`/teams/${teamId}`, {
+    name,
+    description: description ?? "",
+  });
+  return data;
+}
+
+/** 팀장 변경 (서버는 PATCH 매핑, 바디 키: newLeaderId) */
+export async function changeLeader(teamId: number, newLeaderId: number) {
+  await http.patch(`/teams/${teamId}/leader`, { newLeaderId });
+}
+
+/** 팀원 제거 */
+export async function removeMember(teamId: number, memberId: number) {
+  await http.delete(`/teams/${teamId}/members/${memberId}`);
+}
+
+/** 팀 삭제 */
+export async function deleteTeam(teamId: number) {
+  await http.delete(`/teams/${teamId}`);
 }

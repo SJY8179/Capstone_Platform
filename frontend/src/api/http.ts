@@ -1,4 +1,4 @@
-﻿import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
+﻿import axios from "axios";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL /* 배포/프록시 커스텀 */ ??
@@ -7,6 +7,7 @@ const API_BASE =
 export const http = axios.create({
   baseURL: API_BASE,
   timeout: 15000,
+  withCredentials: true, // 쿠키 기반 인증 병행 시도 대비 (Bearer도 함께 보냄)
 });
 
 // ----- 토큰 헬퍼 -----

@@ -334,7 +334,7 @@ export async function getProjectDetail(projectId: number): Promise<ProjectDetail
   return normalizeProjectDetail(data);
 }
 
-/** 🔧 깃허브 링크 업데이트 (저장/제거) */
+/** 깃허브 링크 업데이트 (저장/제거) */
 export async function updateProjectRepo(
   projectId: number,
   githubUrl: string | null

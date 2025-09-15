@@ -27,6 +27,7 @@ public class RiskController {
         if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof UserAccount ua)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
         }
+        // Java 17 패턴 변수 반환
         return (UserAccount) auth.getPrincipal();
     }
 
@@ -94,11 +95,14 @@ public class RiskController {
             String status
     ) {}
 
-    /** 수정/삭제는 교수/관리자만 */
+    /**
+     * 수정은 학생도 허용.
+     * 단, status 변경은 교수/관리자만 가능(학생이 보낸 status 값은 무시).
+     */
     @PatchMapping("/risks/{riskId}")
     public RiskDto patch(@PathVariable Long riskId, @RequestBody PatchRiskReq req, Authentication auth) {
         UserAccount ua = ensureUser(auth);
-        if (!canManage(ua)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한 없음");
+        boolean manager = canManage(ua);
 
         Risk p = new Risk();
         p.setTitle(req.title());
@@ -111,11 +115,15 @@ public class RiskController {
             p.setDueDate(parseFlexible(req.dueDate()));
         }
 
-        p.setStatus(parseStatus(req.status()));
+        if (manager && req.status() != null) {
+            p.setStatus(parseStatus(req.status()));
+        }
+        // 학생이 status를 보내더라도 여기서 무시됨
 
         return map(service.patch(riskId, p));
     }
 
+    /** 삭제는 교수/관리자만 */
     @DeleteMapping("/risks/{riskId}")
     public void delete(@PathVariable Long riskId, Authentication auth) {
         UserAccount ua = ensureUser(auth);

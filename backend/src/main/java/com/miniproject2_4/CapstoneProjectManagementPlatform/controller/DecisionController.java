@@ -4,7 +4,6 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.Decis
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Decision;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.UserRepository;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.DecisionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,7 +22,6 @@ import static com.miniproject2_4.CapstoneProjectManagementPlatform.util.DateTime
 public class DecisionController {
 
     private final DecisionService service;
-    private final UserRepository userRepository;
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private UserAccount ensureUser(Authentication auth) {
@@ -92,11 +90,14 @@ public class DecisionController {
             Long decidedById
     ) {}
 
-    /** 수정/삭제는 교수/관리자만 */
+    /**
+     * 수정은 학생도 허용.
+     * 단, decidedAt/decidedBy는 교수/관리자만 설정 가능(학생이 보낸 값은 무시).
+     */
     @PatchMapping("/decisions/{id}")
     public DecisionDto patch(@PathVariable Long id, @RequestBody PatchDecisionReq req, Authentication auth) {
         UserAccount ua = ensureUser(auth);
-        if (!canManage(ua)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한 없음");
+        boolean manager = canManage(ua);
 
         Decision p = new Decision();
         p.setTitle(req.title());
@@ -105,17 +106,15 @@ public class DecisionController {
         p.setDecision(req.decision());
         p.setConsequences(req.consequences());
 
-        if (req.decidedAt() != null && !req.decidedAt().isBlank()) {
+        if (manager && req.decidedAt() != null && !req.decidedAt().isBlank()) {
             p.setDecidedAt(parseFlexible(req.decidedAt()));
         }
-        if (req.decidedById() != null) {
-            var by = userRepository.findById(req.decidedById()).orElse(null);
-            p.setDecidedBy(by);
-        }
 
-        return map(service.patch(id, p));
+        Long decidedById = manager ? req.decidedById() : null;
+        return map(service.patch(id, p, decidedById));
     }
 
+    /** 삭제는 교수/관리자만 */
     @DeleteMapping("/decisions/{id}")
     public void delete(@PathVariable Long id, Authentication auth) {
         UserAccount ua = ensureUser(auth);
