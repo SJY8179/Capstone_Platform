@@ -1,7 +1,10 @@
 ﻿import { http } from "@/api/http";
 import type { FeedbackDto, CursorPage } from "@/types/domain";
 
-/** 프로젝트 피드백 목록 조회 (limit 미지정 시 서버 기본값 3 적용) */
+/** 프로젝트 피드백 목록 조회 (limit 미지정 시 서버 기본값 3 적용)
+ *  - 별점은 콘텐츠 내에 메타로 포함됩니다: "[rating:3] 내용..."
+ *    표시할 때는 프론트에서 파싱해 별 UI로 렌더링합니다.
+ */
 export async function listProjectFeedback(projectId: number, limit?: number) {
   const { data } = await http.get<FeedbackDto[]>(
     `/projects/${projectId}/feedback`,
@@ -29,7 +32,9 @@ export async function listProjectFeedbackPage(
   return data;
 }
 
-/** 피드백 생성 (ADMIN/담당교수) */
+/** 피드백 생성 (ADMIN/담당교수)
+ *  - 별점을 함께 저장하려면 content 앞에 "[rating:4] " 같은 메타를 붙여 전송하세요.
+ */
 export async function createProjectFeedback(projectId: number, content: string) {
   const { data } = await http.post<FeedbackDto>(
     `/projects/${projectId}/feedback`,
@@ -38,7 +43,9 @@ export async function createProjectFeedback(projectId: number, content: string) 
   return data;
 }
 
-/** 피드백 수정 (ADMIN/담당교수) */
+/** 피드백 수정 (ADMIN/담당교수)
+ *  - 별점 변경 시에도 동일: content에 "[rating:x] " 메타를 포함해서 전송
+ */
 export async function updateProjectFeedback(
   projectId: number,
   feedbackId: number,

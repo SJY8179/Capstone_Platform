@@ -13,14 +13,7 @@ import {
 import { useAuth } from "@/stores/auth";
 import type { FeedbackDto } from "@/types/domain";
 
-type Props = {
-  projectId: number;
-  /** 작성·수정·삭제 권한(관리자/담당교수) */
-  canWrite?: boolean;
-  /** 초기에 불러올 개수 (기본 5) */
-  initialLimit?: number;
-};
-
+/* ===== 공통 유틸: 시간/레이팅 ===== */
 function formatK(iso?: string | null) {
   if (!iso) return "-";
   try {
@@ -38,6 +31,51 @@ function formatK(iso?: string | null) {
   }
 }
 
+function parseRating(content?: string | null): { rating: number | null; body: string } {
+  const raw = content ?? "";
+  const m = raw.match(/\[rating:(\d)\]/i);
+  const rating = m ? Math.max(1, Math.min(5, Number(m[1]))) : null;
+  const body = raw.replace(/\s*\[rating:\d\]\s*/i, "").trim();
+  return { rating, body };
+}
+
+function composeWithRating(body: string, rating: number | null) {
+  const clean = (body || "").trim();
+  return rating ? `[rating:${rating}] ${clean}` : clean;
+}
+
+function StarPicker({
+  value,
+  onChange,
+  readOnly = false,
+}: { value: number; onChange?: (v: number) => void; readOnly?: boolean }) {
+  const makeBtn = (i: number) => {
+    const filled = i <= value;
+    const base = filled ? "text-yellow-500" : "text-muted-foreground";
+    return (
+      <button
+        key={i}
+        type="button"
+        className={`px-0.5 ${base} select-none`}
+        aria-label={`${i}점`}
+        onClick={() => !readOnly && onChange?.(i)}
+        disabled={readOnly}
+      >
+        {filled ? "★" : "☆"}
+      </button>
+    );
+  };
+  return <div className="inline-flex">{[1, 2, 3, 4, 5].map(makeBtn)}</div>;
+}
+
+type Props = {
+  projectId: number;
+  /** 작성·수정·삭제 권한(관리자/담당교수) */
+  canWrite?: boolean;
+  /** 초기에 불러올 개수 (기본 5) */
+  initialLimit?: number;
+};
+
 export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }: Props) {
   const { user } = useAuth();
   const [items, setItems] = useState<FeedbackDto[]>([]);
@@ -46,6 +84,7 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
   // 작성 폼
   const [text, setText] = useState("");
   const [creating, setCreating] = useState(false);
+  const [newRating, setNewRating] = useState<number>(0);
 
   // 검색(간단 필터)
   const [q, setQ] = useState("");
@@ -53,6 +92,7 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
   // 편집 상태
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [editingRating, setEditingRating] = useState<number>(0);
 
   const load = async () => {
     setLoading(true);
@@ -84,8 +124,8 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
   }, [items, q]);
 
   const onCreate = async () => {
-    const content = text.trim();
-    if (!content) {
+    const contentBody = text.trim();
+    if (!contentBody) {
       toast.message("내용을 입력하세요.");
       return;
     }
@@ -96,14 +136,15 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
     const optimistic: FeedbackDto = {
       id: tempId,
       author: user?.name || "나",
-      content,
+      content: composeWithRating(contentBody, newRating || null),
       createdAt: new Date().toISOString(),
     };
     setItems((prev) => [optimistic, ...prev]);
     setText("");
+    setNewRating(0);
 
     try {
-      const created = await createProjectFeedback(projectId, content);
+      const created = await createProjectFeedback(projectId, optimistic.content || "");
       // temp 교체
       setItems((prev) =>
         prev.map((x) => (x.id === tempId ? created : x))
@@ -113,7 +154,8 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
       console.error(e);
       // 롤백
       setItems((prev) => prev.filter((x) => x.id !== tempId));
-      setText(content);
+      setText(contentBody);
+      setNewRating(newRating);
       toast.error("작성에 실패했어요.");
     } finally {
       setCreating(false);
@@ -122,32 +164,38 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
 
   const startEdit = (it: FeedbackDto) => {
     setEditingId(it.id);
-    setEditingValue(it.content ?? "");
+    const { rating, body } = parseRating(it.content);
+    setEditingValue(body);
+    setEditingRating(rating ?? 0);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditingValue("");
+    setEditingRating(0);
   };
 
   const onSaveEdit = async (id: number) => {
-    const content = editingValue.trim();
-    if (!content) {
+    const contentBody = editingValue.trim();
+    if (!contentBody) {
       toast.message("내용을 입력하세요.");
       return;
     }
 
+    const nextContent = composeWithRating(contentBody, editingRating || null);
+
     // 낙관적 반영
     const prev = items.find((x) => x.id === id);
     setItems((prevList) =>
-      prevList.map((x) => (x.id === id ? { ...x, content } : x))
+      prevList.map((x) => (x.id === id ? { ...x, content: nextContent } : x))
     );
 
     try {
-      await updateProjectFeedback(projectId, id, content);
+      await updateProjectFeedback(projectId, id, nextContent);
       toast.success("수정되었습니다.");
       setEditingId(null);
       setEditingValue("");
+      setEditingRating(0);
     } catch (e) {
       console.error(e);
       // 롤백
@@ -183,6 +231,11 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
       {canWrite && (
         <Card>
           <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">별점</span>
+              <StarPicker value={newRating} onChange={(v) => setNewRating(v)} />
+              {newRating ? <span className="text-xs text-muted-foreground ml-1">{newRating}/5</span> : null}
+            </div>
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -218,54 +271,73 @@ export default function FeedbackPanel({ projectId, canWrite, initialLimit = 5 }:
         <div className="text-sm text-muted-foreground p-6">피드백이 없습니다.</div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((it) => (
-            <Card key={it.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{it.author || "작성자"}</div>
-                    <div className="text-xs text-muted-foreground mb-2">
-                      {formatK(it.createdAt)}
+          {filtered.map((it) => {
+            const { rating, body } = parseRating(it.content);
+            const isEditing = editingId === it.id;
+            return (
+              <Card key={it.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">{it.author || "작성자"}</div>
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {formatK(it.createdAt)}
+                      </div>
+
+                      {isEditing ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm text-muted-foreground">별점</span>
+                            <StarPicker value={editingRating} onChange={(v) => setEditingRating(v)} />
+                            {editingRating ? (
+                              <span className="text-xs text-muted-foreground ml-1">{editingRating}/5</span>
+                            ) : null}
+                          </div>
+                          <Textarea
+                            value={editingValue}
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            rows={3}
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" onClick={() => onSaveEdit(it.id)}>
+                              저장
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={cancelEdit}>
+                              취소
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {rating != null && (
+                            <div className="mb-1">
+                              <StarPicker value={rating} readOnly />
+                              <span className="text-xs text-muted-foreground ml-2">{rating}/5</span>
+                            </div>
+                          )}
+                          <div className="whitespace-pre-wrap text-sm">
+                            {body || "-"}
+                          </div>
+                        </>
+                      )}
                     </div>
 
-                    {editingId === it.id ? (
-                      <>
-                        <Textarea
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          rows={3}
-                        />
-                        <div className="mt-2 flex gap-2">
-                          <Button size="sm" onClick={() => onSaveEdit(it.id)}>
-                            저장
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={cancelEdit}>
-                            취소
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="whitespace-pre-wrap text-sm">
-                        {it.content || "-"}
+                    {/* 액션(권한 보유 시) */}
+                    {canWrite && !isEditing && (
+                      <div className="flex-shrink-0 flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => startEdit(it)}>
+                          수정
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => onDelete(it.id)}>
+                          삭제
+                        </Button>
                       </div>
                     )}
                   </div>
-
-                  {/* 액션(권한 보유 시) */}
-                  {canWrite && editingId !== it.id && (
-                    <div className="flex-shrink-0 flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => startEdit(it)}>
-                        수정
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => onDelete(it.id)}>
-                        삭제
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
