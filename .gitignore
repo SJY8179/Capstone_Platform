@@ -1,36 +1,33 @@
-/backend/target/
-/backend/.mvn/
-/backend/.idea/
-/backend/build/
-/frontend/node_modules/
-/frontend/dist/
-/frontend/.vite/
-/backend/src/main/resources/application-local.properties
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-# build/cache
-frontend/dist/
-frontend/.vite/
-frontend/.cache/
-coverage/
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
 
-# temp/log
-*.log
-npm-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
 
-# OS/IDE
-.DS_Store
-Thumbs.db
-.idea/
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
 .vscode/
-
-# worktree/misc
-.trash/
-
-# Node/Vite (root & frontend)
-node_modules/
-.vite/
-dist/
-
-prompt.txt
