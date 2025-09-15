@@ -43,10 +43,6 @@ public class ProjectService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
         }
 
-        // 학생만 새 프로젝트를 생성할 수 있도록 제한 (프롬프트 요구사항에 따라)
-        if (creator.getRole() != Role.STUDENT) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 새 프로젝트를 생성할 수 있습니다.");
-        }
 
         // 기존 팀 선택
         Team team = teamRepository.findById(request.teamId())
