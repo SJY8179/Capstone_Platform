@@ -13,7 +13,7 @@ import {
   ChevronRight,
   Clock,
   AlertCircle,
-  Bell,
+  ListChecks,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -67,15 +67,12 @@ export function Sidebar({
     const common = [
       { id: "dashboard" as ActivePage, label: "대시보드", icon: Home },
       { id: "projects" as ActivePage, label: "프로젝트", icon: FolderOpen },
-      // ✅ 과제 페이지 추가 (영규님 기능)
-      { id: "assignments" as ActivePage, label: "과제", icon: ClipboardCheck },
+      { id: "assignments" as ActivePage, label: "과제", icon: ListChecks },
     ];
-
     const student = [
       ...common,
       { id: "teams" as ActivePage, label: "팀 관리", icon: Users },
     ];
-
     const professor = [
       ...common,
       { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
@@ -85,7 +82,8 @@ export function Sidebar({
     const admin = [
       ...common,
       { id: "users" as ActivePage, label: "사용자 관리", icon: UserCog },
-      { id: "evaluation" as ActivePage, label: "평가 시스템", icon: ClipboardCheck },
+      // ✅ 용어 통일: “평가 관리”
+      { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
     ];
 
     switch (userRole) {
@@ -151,7 +149,10 @@ export function Sidebar({
 
   useEffect(() => {
     reloadUpcoming();
-    const sub = scheduleBus.subscribe(reloadUpcoming);
+    const unsub = scheduleBus.subscribe(() => {
+      if (projectId) invalidateSchedulesCache(projectId);
+      reloadUpcoming();
+    });
     return () => {
       try {
         sub(); // 구독 해지

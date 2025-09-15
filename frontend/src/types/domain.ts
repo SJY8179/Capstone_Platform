@@ -14,6 +14,74 @@ export interface ProjectListDto {
   nextDeadline: { task: string; date: string } | null;
 }
 
+/** 상세 보기 DTO (백엔드 ProjectDetailDto와 1:1) */
+export interface ProjectDetailDto {
+  id: number;
+  title: string;
+  status: ProjectStatus;
+  team: { id: number | null; name: string };
+  professor: { id: number; name: string; email: string } | null;
+  repo?: { owner?: string | null; name?: string | null; url?: string | null } | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  progress: number; // 0~100
+  taskSummary: { total: number; completed: number; ongoing: number; pending: number };
+  tasks: { id: number; title: string; status: "completed" | "ongoing" | "pending"; dueDate?: string | null }[];
+  upcomingEvents: { id: number; title: string; type: EventType | string; startAt?: string | null; endAt?: string | null; location?: string | null }[];
+  links: { label: string; url: string }[];
+}
+
+/** ---------- Project Overview (개요서) ---------- */
+export interface ProjectOverviewDto {
+  markdown: string;
+  status: "PUBLISHED" | "PENDING";
+  version: number;
+  updatedAt?: string | null;
+  updatedBy?: { id: number; name: string } | null;
+  /** 검토 대기 중인 초안 */
+  pendingMarkdown?: string | null;
+  pendingAuthor?: { id: number; name: string } | null;
+  pendingAt?: string | null;
+}
+
+/** ---------- Documents (링크/파일 메타) ---------- */
+export interface ProjectDocumentDto {
+  id: number;
+  projectId: number;
+  title: string;
+  url: string;
+  type: "SPEC" | "REPORT" | "PRESENTATION" | "OTHER";
+  createdAt?: string | null;
+  createdBy?: { id: number; name: string } | null;
+}
+
+/** ---------- Risks ---------- */
+export interface RiskDto {
+  id: number;
+  projectId: number;
+  title: string;
+  impact: 1|2|3|4|5;
+  likelihood: 1|2|3|4|5;
+  mitigation?: string | null;
+  owner?: string | null;
+  dueDate?: string | null;
+  status: "OPEN" | "MITIGATING" | "CLOSED";
+  updatedAt?: string | null;
+}
+
+/** ---------- Decisions (ADR) ---------- */
+export interface DecisionDto {
+  id: number;
+  projectId: number;
+  title: string;
+  context?: string | null;
+  options?: string | null;
+  decision?: string | null;
+  consequences?: string | null;
+  decidedAt?: string | null;
+  decidedBy?: { id: number; name: string } | null;
+}
+
 /** 공통: 커서 페이지 응답 */
 export interface CursorPage<T> {
   items: T[];

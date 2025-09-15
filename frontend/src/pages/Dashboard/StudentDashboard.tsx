@@ -9,7 +9,7 @@ import { CalendarWidget } from "@/components/Dashboard/CalendarWidget";
 import { EventEditor } from "@/components/Schedule/EventEditor";
 import { scheduleBus } from "@/lib/schedule-bus";
 import {
-  Calendar, Users, FileText, GitBranch, CheckCircle, AlertCircle, Plus, Video, Clock,
+  Calendar, Users, FileText, GitBranch, CheckCircle, AlertCircle, Plus, Video, Clock, Eye
 } from "lucide-react";
 import { getProjectDashboardSummary } from "@/api/dashboard";
 import { listProjectFeedback } from "@/api/feedback";
@@ -60,10 +60,34 @@ function TypeIcon({ type, className = "h-4 w-4" }: { type: ScheduleDto["type"]; 
   }
 }
 
+/* ===== rating parser / renderer ===== */
+function parseRating(content?: string | null): { rating: number | null; body: string } {
+  const raw = content ?? "";
+  const m = raw.match(/\[rating:(\d)\]/i);
+  const rating = m ? Math.max(1, Math.min(5, Number(m[1]))) : null;
+  const body = raw.replace(/\s*\[rating:\d\]\s*/i, "").trim();
+  return { rating, body };
+}
+
+function StarRating({ rating }: { rating: number }) {
+  const filled = "★★★★★".slice(0, rating);
+  const empty = "☆☆☆☆☆".slice(0, 5 - rating);
+  return (
+    <span className="text-yellow-500 select-none" aria-label={`${rating}/5`}>
+      <span className="tracking-tight">{filled}</span>
+      <span className="text-muted-foreground tracking-tight">{empty}</span>
+    </span>
+  );
+}
+
 /* ===== component ===== */
 interface StudentDashboardProps {
   projectId?: number;
 }
+
+/** 서버 기본값이 3개이므로, '피드백 보기' 클릭 시 한 번 더 크게 가져온다 */
+const DEFAULT_FB_LIMIT = 3;
+const ALL_FB_LIMIT = 100;
 
 export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [project, setProject] = useState<ProjectListDto | null>(null);
@@ -75,6 +99,9 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
+
+  // 🔹 피드백 조회 개수 상태
+  const [fbLimit, setFbLimit] = useState<number>(DEFAULT_FB_LIMIT);
 
   const refreshSchedules = useCallback(async () => {
     if (!projectId) {
@@ -116,7 +143,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           listProjects(),
           listTeams(),
           getProjectDashboardSummary(projectId),
-          listProjectFeedback(projectId),
+          // 🔹 현재 limit 기준으로 피드백 조회 (서버 기본 3 → 버튼 후 100)
+          listProjectFeedback(projectId, fbLimit),
         ]);
 
         const currentProject =
@@ -141,7 +169,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         setLoading(false);
       }
     })();
-  }, [projectId, refreshSchedules]);
+  }, [projectId, refreshSchedules, fbLimit]); // ← fbLimit 변경 시 재조회
 
   /* 다른 컴포넌트에서 일정이 변경되면 대시보드도 즉시 갱신 */
   useEffect(() => {
@@ -203,6 +231,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   };
 
   if (loading) return <div>Loading...</div>;
+
+  const isShowingAll = fbLimit >= ALL_FB_LIMIT;
 
   return (
     <div className="space-y-6">
@@ -398,32 +428,51 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
       <CalendarWidget projectId={projectId} />
 
       {/* 최근 피드백 */}
-      <Card>
+      <Card id="recent-feedback">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>최근 피드백</CardTitle>
               <CardDescription>교수/멘토로부터의 최신 피드백</CardDescription>
             </div>
-            <Button variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              피드백 등록
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!isShowingAll) setFbLimit(ALL_FB_LIMIT); // 🔹 전체 로드로 전환
+                document.getElementById("recent-feedback")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              title={isShowingAll ? "피드백 보기" : "피드백 전체 보기"}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              {isShowingAll ? "피드백 보기" : "피드백 전체 보기"}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {feedback.map((fb) => (
-              <div key={fb.id} className="p-4 border rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline">{fb.author ?? "작성자"}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateK(fb.createdAt)}
-                  </span>
+            {feedback.map((fb) => {
+              const { rating, body } = parseRating(fb.content);
+              return (
+                <div key={fb.id} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline">{fb.author ?? "작성자"}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateK(fb.createdAt)}
+                    </span>
+                  </div>
+
+                  {rating != null && (
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="secondary">{rating}/5</Badge>
+                      <StarRating rating={rating} />
+                    </div>
+                  )}
+
+                  <p className="text-sm whitespace-pre-wrap">{body || "-"}</p>
                 </div>
-                <p className="text-sm">{fb.content}</p>
-              </div>
-            ))}
+              );
+            })}
             {feedback.length === 0 && (
               <div className="text-sm text-muted-foreground text-center py-4">
                 등록된 피드백이 없습니다.

@@ -36,3 +36,10 @@ build/
 logs/
 *.log
 
+
+# Node / build outputs
+node_modules/
+frontend/node_modules/
+.vite/
+frontend/.vite/
+
