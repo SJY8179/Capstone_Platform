@@ -9,9 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
   Search, Plus, FileText, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
+  Archive, RotateCcw, Trash2, MoreHorizontal,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
-import { listProjects, getProjectDetail } from "@/api/projects";
+import { listProjects, getProjectDetail, listArchivedProjects, restoreProject } from "@/api/projects";
 import type { ProjectListDto, ProjectStatus } from "@/types/domain";
 import { useAuth } from "@/stores/auth";
 import {
@@ -21,10 +22,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
 import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
 import CreateProjectModal from "@/components/Projects/CreateProjectModal";
+import ArchiveConfirmModal from "@/components/Projects/ArchiveConfirmModal";
+import PurgeConfirmModal from "@/components/Projects/PurgeConfirmModal";
 import { listTeams } from "@/api/teams";
 
 /** 상태 -> 라벨 매핑 */
@@ -55,9 +65,11 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   const canWriteFeedback = isAdmin || isProfessor;
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [tab, setTab] = useState<ProjectStatus | "all">("all");
+  const [tab, setTab] = useState<ProjectStatus | "all" | "archived">("all");
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
+  const [archivedProjects, setArchivedProjects] = useState<ProjectListDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingArchived, setLoadingArchived] = useState(false);
 
   // 피드백 모달
   const [feedbackProjectId, setFeedbackProjectId] = useState<number | null>(null);
@@ -69,6 +81,10 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
   // 프로젝트 생성 모달
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Archive/Purge modals
+  const [archiveProject, setArchiveProject] = useState<ProjectListDto | null>(null);
+  const [purgeProject, setPurgeProject] = useState<ProjectListDto | null>(null);
 
   const handleProjectCreated = (newProject: ProjectListDto) => {
     // 새 프로젝트를 목록에 추가 (맨 앞에 추가)
@@ -105,11 +121,28 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     })();
   }, [isAdmin]);
 
+  // Load archived projects when archived tab is selected
+  useEffect(() => {
+    if (tab === "archived" && archivedProjects.length === 0) {
+      (async () => {
+        try {
+          setLoadingArchived(true);
+          const data = await listArchivedProjects();
+          setArchivedProjects(data ?? []);
+        } catch (error) {
+          console.error("Failed to load archived projects:", error);
+          toast.error("아카이브된 프로젝트를 불러오는데 실패했습니다.");
+        } finally {
+          setLoadingArchived(false);
+        }
+      })();
+    }
+  }, [tab, archivedProjects.length]);
+
   /** 탭/검색 2차 필터 + 최근 업데이트 정렬 */
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
-    const byTab = (p: ProjectListDto) => (tab === "all" ? true : p.status === tab);
     const bySearch = (p: ProjectListDto) => {
       const team = (p.team ?? "").toLowerCase();
       const name = (p.name ?? "").toLowerCase();
@@ -117,14 +150,23 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       return name.includes(q) || team.includes(q) || memberNames.some((n) => n.includes(q));
     };
 
-    const sorted = [...projects].sort((a, b) => {
+    // Choose data source based on tab
+    let sourceProjects: ProjectListDto[];
+    if (tab === "archived") {
+      sourceProjects = archivedProjects;
+    } else {
+      const byTab = (p: ProjectListDto) => (tab === "all" ? true : p.status === tab);
+      sourceProjects = projects.filter(byTab);
+    }
+
+    const sorted = [...sourceProjects].sort((a, b) => {
       const ta = a.lastUpdate ?? "";
       const tb = b.lastUpdate ?? "";
       return tb.localeCompare(ta);
     });
 
-    return sorted.filter(byTab).filter(bySearch);
-  }, [projects, searchQuery, tab]);
+    return sorted.filter(bySearch);
+  }, [projects, archivedProjects, searchQuery, tab]);
 
   /** 🔗 GitHub 버튼: 링크가 있으면 새 탭, 없으면 안내 토스트 */
   const openGithub = async (projectId: number) => {
@@ -146,53 +188,70 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     }
   };
 
+  /** Handle successful archive/restore/purge operations */
+  const handleProjectArchived = (projectId: number) => {
+    // Remove from active projects and add to archived
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    // Refresh archived list if it's loaded
+    if (archivedProjects.length > 0) {
+      setArchivedProjects([]); // Force reload on next view
+    }
+  };
+
+  const handleProjectRestored = async (projectId: number) => {
+    try {
+      await restoreProject(projectId);
+
+      // Remove from archived projects
+      setArchivedProjects(prev => prev.filter(p => p.id !== projectId));
+
+      // Refresh active projects list
+      const data = await listProjects({ isAdmin });
+      setProjects(data ?? []);
+
+      toast.success("프로젝트가 복원되었습니다.");
+    } catch (error) {
+      console.error("Restore failed:", error);
+      toast.error("복원에 실패했습니다.");
+    }
+  };
+
+  const handleProjectPurged = (projectId: number) => {
+    // Remove from archived projects
+    setArchivedProjects(prev => prev.filter(p => p.id !== projectId));
+  };
+
   const renderActions = (p: ProjectListDto) => {
-    if (userRole === "student") {
-      return (
-        <div className="flex gap-2">
-          {/* ✅ 학생도 프로젝트 상세(개요서 포함) 열람 가능 */}
-          <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
-            <Eye className="h-4 w-4 mr-1" />
-            열람
-          </Button>
-          <Button size="sm" variant="outline">
-            <FileText className="h-4 w-4 mr-1" />
-            보고서 작성
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
-            <GitBranch className="h-4 w-4 mr-1" />
-            GitHub
-          </Button>
-          {/* 학생도 피드백 열람/작성 허용하려면 아래 주석 해제
-          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
-            <MessageSquare className="h-4 w-4 mr-1" />
-            피드백
-          </Button>
-          */}
-        </div>
-      );
-    }
-    if (userRole === "professor") {
+    const isArchived = tab === "archived";
+
+    if (isArchived) {
+      // Actions for archived projects
       return (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
             <Eye className="h-4 w-4 mr-1" />
             열람
           </Button>
-          <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
-            <GitBranch className="h-4 w-4 mr-1" />
-            GitHub
+          <Button size="sm" variant="outline" onClick={() => handleProjectRestored(p.id)}>
+            <RotateCcw className="h-4 w-4 mr-1" />
+            복원
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
-            <MessageSquare className="h-4 w-4 mr-1" />
-            피드백
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setPurgeProject(p)}
+            className="text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            영구삭제
           </Button>
         </div>
       );
     }
-    // admin
-    return (
-      <div className="flex gap-2">
+
+    // Actions for active projects
+    const commonActions = (
+      <>
         <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
           <Eye className="h-4 w-4 mr-1" />
           열람
@@ -201,6 +260,63 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <GitBranch className="h-4 w-4 mr-1" />
           GitHub
         </Button>
+      </>
+    );
+
+    if (userRole === "student") {
+      return (
+        <div className="flex gap-2">
+          {commonActions}
+          <Button size="sm" variant="outline">
+            <FileText className="h-4 w-4 mr-1" />
+            보고서 작성
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setArchiveProject(p)}>
+                <Archive className="h-4 w-4 mr-2" />
+                아카이브
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      );
+    }
+
+    if (userRole === "professor") {
+      return (
+        <div className="flex gap-2">
+          {commonActions}
+          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
+            <MessageSquare className="h-4 w-4 mr-1" />
+            피드백
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setArchiveProject(p)}>
+                <Archive className="h-4 w-4 mr-2" />
+                아카이브
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      );
+    }
+
+    // admin
+    return (
+      <div className="flex gap-2">
+        {commonActions}
         <Button size="sm" variant="outline">
           <Edit className="h-4 w-4 mr-1" />
           편집
@@ -209,6 +325,24 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <MessageSquare className="h-4 w-4 mr-1" />
           피드백
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setArchiveProject(p)}>
+              <Archive className="h-4 w-4 mr-2" />
+              아카이브
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setPurgeProject(p)} className="text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" />
+              영구삭제
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   };
@@ -257,6 +391,9 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <TabsTrigger value="in-progress">진행중</TabsTrigger>
           <TabsTrigger value="review">검토중</TabsTrigger>
           <TabsTrigger value="completed">완료</TabsTrigger>
+          <TabsTrigger value="archived" className="text-muted-foreground">
+            아카이브
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-6">
@@ -333,9 +470,18 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
               );
             })}
 
-            {!loading && filtered.length === 0 && (
+            {(loadingArchived && tab === "archived") && (
               <div className="text-center text-muted-foreground py-12">
-                표시할 프로젝트가 없습니다.
+                아카이브된 프로젝트를 불러오는 중...
+              </div>
+            )}
+
+            {!loading && !loadingArchived && filtered.length === 0 && (
+              <div className="text-center text-muted-foreground py-12">
+                {tab === "archived"
+                  ? "아카이브된 프로젝트가 없습니다."
+                  : "표시할 프로젝트가 없습니다."
+                }
               </div>
             )}
           </div>
@@ -388,6 +534,22 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
         onSuccess={handleProjectCreated}
+      />
+
+      {/* Archive confirmation modal */}
+      <ArchiveConfirmModal
+        open={archiveProject !== null}
+        onOpenChange={(open) => !open && setArchiveProject(null)}
+        project={archiveProject}
+        onSuccess={handleProjectArchived}
+      />
+
+      {/* Purge confirmation modal */}
+      <PurgeConfirmModal
+        open={purgeProject !== null}
+        onOpenChange={(open) => !open && setPurgeProject(null)}
+        project={purgeProject}
+        onSuccess={handleProjectPurged}
       />
     </div>
   );

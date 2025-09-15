@@ -34,6 +34,9 @@ public class Project extends BaseEntity {
     @Column(nullable = false, length = 20)
     private Status status;   // <-- DB 값: ACTIVE
 
+    @Column(nullable = false)
+    private Boolean archived = false;
+
     /** ProjectService에서 참조하는 중첩 enum */
     public enum Status {
         ACTIVE,        // 현재 DB에 들어있는 값

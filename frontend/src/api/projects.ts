@@ -348,3 +348,25 @@ export async function updateProjectRepo(
   const { data } = await http.put(`/projects/${projectId}/repo`, { githubUrl });
   return normalizeProjectDetail(data);
 }
+
+/** Archive project (soft delete) */
+export async function archiveProject(projectId: number): Promise<void> {
+  await http.delete(`/projects/${projectId}`);
+}
+
+/** Restore project from archive */
+export async function restoreProject(projectId: number): Promise<void> {
+  await http.post(`/projects/${projectId}/restore`);
+}
+
+/** Permanently delete project */
+export async function purgeProject(projectId: number): Promise<void> {
+  await http.delete(`/projects/${projectId}/purge`);
+}
+
+/** List archived projects */
+export async function listArchivedProjects(): Promise<ProjectListDto[]> {
+  const { data } = await http.get("/projects?status=archived");
+  const rows = normalizeListPayload(data);
+  return rows.map((r: any) => normalizeProject(r)).filter((p) => Number.isFinite(p.id));
+}
