@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import type { User, UserRole } from "@/types/user";
 import { http } from "@/api/http";
+import { ForgotIdForm } from "./ForgotIdForm";
+import { ForgotPasswordForm } from "./ForgotPasswordForm";
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
@@ -23,6 +25,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     role: "" as UserRole | "",
   });
   const [loading, setLoading] = useState(false);
+  const [currentView, setCurrentView] = useState<"login" | "forgot-id" | "forgot-password">("login");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +110,35 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     }
   };
 
+  // 아이디 찾기 또는 비밀번호 재설정 화면인 경우
+  if (currentView === "forgot-id") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">캡스톤 프로젝트 관리</h1>
+            <p className="text-gray-600">프로젝트를 체계적으로 관리하고 협업하세요</p>
+          </div>
+          <ForgotIdForm onBack={() => setCurrentView("login")} />
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === "forgot-password") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">캡스톤 프로젝트 관리</h1>
+            <p className="text-gray-600">프로젝트를 체계적으로 관리하고 협업하세요</p>
+          </div>
+          <ForgotPasswordForm onBack={() => setCurrentView("login")} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md">
@@ -149,9 +181,30 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                   </div>
                 </CardContent>
                 <CardFooter className="pt-6">
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "처리 중..." : "로그인"}
-                  </Button>
+                  <div className="w-full space-y-4">
+                    <Button type="submit" className="w-full" disabled={loading}>
+                      {loading ? "처리 중..." : "로그인"}
+                    </Button>
+                    <div className="text-center space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentView("forgot-id")}
+                        className="text-sm text-blue-600 hover:text-blue-800 underline"
+                        disabled={loading}
+                      >
+                        아이디 찾기
+                      </button>
+                      <span className="text-sm text-gray-400 mx-2">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentView("forgot-password")}
+                        className="text-sm text-blue-600 hover:text-blue-800 underline"
+                        disabled={loading}
+                      >
+                        비밀번호 재설정
+                      </button>
+                    </div>
+                  </div>
                 </CardFooter>
               </form>
             </TabsContent>
