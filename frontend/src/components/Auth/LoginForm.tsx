@@ -148,7 +148,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                     />
                   </div>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="pt-6">
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "처리 중..." : "로그인"}
                   </Button>
@@ -213,7 +213,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                     />
                   </div>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="pt-6">
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "처리 중..." : "회원가입"}
                   </Button>
