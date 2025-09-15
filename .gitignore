@@ -60,3 +60,7 @@ Thumbs.db
 
 # === Local secrets (반드시 ignore) ===
 backend/src/main/resources/application-local.properties
+
+# === Claude Code settings ===
+.claude/
+prompt.txt
