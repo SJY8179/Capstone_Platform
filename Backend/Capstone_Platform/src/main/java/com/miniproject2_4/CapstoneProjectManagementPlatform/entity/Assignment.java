@@ -1,4 +1,3 @@
-// src/main/java/com/miniproject2_4/CapstoneProjectManagementPlatform/entity/Assignment.java
 package com.miniproject2_4.CapstoneProjectManagementPlatform.entity;
 
 import jakarta.persistence.*;

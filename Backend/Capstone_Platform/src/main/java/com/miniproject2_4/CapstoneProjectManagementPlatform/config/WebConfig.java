@@ -1,4 +1,3 @@
-// src/main/java/com/miniproject2_4/CapstoneProjectManagementPlatform/config/WebConfig.java
 package com.miniproject2_4.CapstoneProjectManagementPlatform.config;
 
 import org.springframework.context.annotation.Configuration;
