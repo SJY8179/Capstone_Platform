@@ -78,11 +78,27 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
     try {
       setIsSubmitting(true);
 
+      // 디버깅을 위한 로그
+      console.log("폼 데이터:", data);
+
+      // 추가 검증
+      if (!data.title || data.title.trim() === "") {
+        toast.error("프로젝트 이름을 입력해주세요.");
+        return;
+      }
+
+      if (!data.teamId) {
+        toast.error("팀을 선택해주세요.");
+        return;
+      }
+
       const request: CreateProjectRequest = {
         title: data.title.trim(),
         description: data.description?.trim() || undefined,
         teamId: parseInt(data.teamId, 10),
       };
+
+      console.log("API 요청 데이터:", request);
 
       const newProject = await createProject(request);
 
@@ -132,6 +148,14 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
               id="title"
               {...register("title", {
                 required: "프로젝트 이름은 필수입니다",
+                validate: {
+                  notEmpty: (value) => {
+                    if (!value || value.trim() === "") {
+                      return "프로젝트 이름은 필수입니다";
+                    }
+                    return true;
+                  }
+                },
                 minLength: { value: 2, message: "2자 이상 입력해주세요" },
                 maxLength: { value: 100, message: "100자를 초과할 수 없습니다" },
               })}
@@ -164,7 +188,17 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
             <Controller
               name="teamId"
               control={control}
-              rules={{ required: "팀을 선택해주세요" }}
+              rules={{
+                required: "팀을 선택해주세요",
+                validate: {
+                  notEmpty: (value) => {
+                    if (!value || value === "") {
+                      return "팀을 선택해주세요";
+                    }
+                    return true;
+                  }
+                }
+              }}
               render={({ field }) => (
                 <Select
                   value={field.value}
