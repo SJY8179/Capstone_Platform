@@ -14,12 +14,11 @@ import ProjectAssignments from "@/pages/Projects/Assignments";
 import { http } from "@/api/http";
 import { Toaster } from "@/components/ui/sonner";
 import type { User } from "@/types/user";
-import ProjectAssignments from "@/pages/Projects/Assignments";
 
-// 1. AppSettings 인터페이스 추가
+/** 앱 설정(로컬스토리지 연동) */
 export interface AppSettings {
-  fontSize: 'small' | 'medium' | 'large';
-  sidebarBehavior: 'auto' | 'always-expanded' | 'always-collapsed';
+  fontSize: "small" | "medium" | "large";
+  sidebarBehavior: "auto" | "always-expanded" | "always-collapsed";
   isDarkMode: boolean;
 }
 
@@ -37,41 +36,47 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // 선택된 프로젝트
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [loadingProjectId, setLoadingProjectId] = useState(false);
 
-  // 2. 앱 설정 상태 추가 (로컬 스토리지 연동)
+  // 앱 설정 (LS 초기 로드)
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     try {
-      const savedSettings = localStorage.getItem('app-settings');
-      return savedSettings ? JSON.parse(savedSettings) : {
-        fontSize: 'medium',
-        sidebarBehavior: 'auto',
-        isDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches, // 시스템 설정 존중
-      };
+      const saved = localStorage.getItem("app-settings");
+      return saved
+        ? JSON.parse(saved)
+        : {
+            fontSize: "medium",
+            sidebarBehavior: "auto",
+            isDarkMode: window.matchMedia("(prefers-color-scheme: dark)").matches,
+          };
     } catch {
-      return { fontSize: 'medium', sidebarBehavior: 'auto', isDarkMode: false };
+      return { fontSize: "medium", sidebarBehavior: "auto", isDarkMode: false };
     }
   });
 
-  // 3. 설정 변경 시 실시간 적용 로직 (useEffect 2개 추가)
+  // 설정 변화 반영: 저장 + 폰트/다크모드 적용
   useEffect(() => {
-    localStorage.setItem('app-settings', JSON.stringify(appSettings));
-    
-    const fontSizeMap = { small: '14px', medium: '16px', large: '18px' };
-    document.documentElement.style.setProperty('--font-size', fontSizeMap[appSettings.fontSize]);
-    
-    document.documentElement.classList.toggle('dark', appSettings.isDarkMode);
+    localStorage.setItem("app-settings", JSON.stringify(appSettings));
+
+    const fontSizeMap: Record<AppSettings["fontSize"], string> = {
+      small: "14px",
+      medium: "16px",
+      large: "18px",
+    };
+    document.documentElement.style.setProperty("--font-size", fontSizeMap[appSettings.fontSize]);
+    document.documentElement.classList.toggle("dark", appSettings.isDarkMode);
   }, [appSettings]);
 
+  // 사이드바 행동 모드 반영
   useEffect(() => {
-    if (appSettings.sidebarBehavior === 'always-expanded') {
-      setSidebarCollapsed(false);
-    } else if (appSettings.sidebarBehavior === 'always-collapsed') {
-      setSidebarCollapsed(true);
-    }
+    if (appSettings.sidebarBehavior === "always-expanded") setSidebarCollapsed(false);
+    else if (appSettings.sidebarBehavior === "always-collapsed") setSidebarCollapsed(true);
   }, [appSettings.sidebarBehavior]);
 
+  // 백엔드 헬스 체크
   useEffect(() => {
     http.get("/actuator/health").catch(() => {
       console.warn("Backend not reachable");
@@ -91,19 +96,13 @@ export default function App() {
     setActiveProjectId(null);
   };
 
-  const handleNotificationClick = () => {
-    setActivePage("notifications");
-  };
+  /** 앱 설정 업데이트 */
+  const updateAppSettings = (partial: Partial<AppSettings>) =>
+    setAppSettings((prev) => ({ ...prev, ...partial }));
 
-  // 4. 설정 업데이트 함수 및 사이드바 토글 핸들러 추가
-  const updateAppSettings = (newSettings: Partial<AppSettings>) => {
-    setAppSettings(prev => ({ ...prev, ...newSettings }));
-  };
-
+  /** 사이드바 토글 (auto 일 때만 수동 토글 허용) */
   const handleSidebarToggle = () => {
-    if (appSettings.sidebarBehavior === 'auto') {
-      setSidebarCollapsed(!sidebarCollapsed);
-    }
+    if (appSettings.sidebarBehavior === "auto") setSidebarCollapsed((v) => !v);
   };
 
   // 로그인 후 “내 프로젝트” 자동 선택
@@ -116,6 +115,7 @@ export default function App() {
         let list: any[] = [];
         let myApiSucceeded = false;
 
+        // 1) /projects/my 우선
         try {
           const r = await http.get("/projects/my");
           myApiSucceeded = true;
@@ -124,6 +124,7 @@ export default function App() {
           if (err?.response?.status !== 404) throw err;
         }
 
+        // 2) fallback: /projects 전체 → 멤버십 우선 선택
         if (!myApiSucceeded) {
           const r = await http.get("/projects");
           const raw = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.content ?? [];
@@ -166,6 +167,7 @@ export default function App() {
     pickMyProject();
   }, [currentUser]);
 
+  // 비로그인 상태
   if (!currentUser) {
     return (
       <>
@@ -238,13 +240,10 @@ export default function App() {
     }
   };
 
-
-  // 6. 사이드바 토글 버튼 비활성화 여부 계산
-  const isSidebarToggleDisabled = appSettings.sidebarBehavior !== 'auto';
+  const isSidebarToggleDisabled = appSettings.sidebarBehavior !== "auto";
 
   return (
     <div className="flex h-screen bg-background">
-      {/* 7. Sidebar에 onToggleCollapse와 toggleDisabled prop 전달 */}
       <Sidebar
         userRole={currentUser.role}
         activePage={activePage}
@@ -260,6 +259,7 @@ export default function App() {
           onLogout={handleLogout}
           activeProjectId={activeProjectId}
           onChangeActiveProject={setActiveProjectId}
+          // (필요하면 Settings 페이지에서 updateAppSettings 전달)
         />
         <main className="flex-1 overflow-auto p-6">{renderMainContent()}</main>
       </div>

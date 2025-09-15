@@ -11,7 +11,7 @@ import {
   Search, Plus, FileText, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
-import { listProjects, getProjectDetail } from "@/api/projects"; // ⬅️ 상세 조회로 repo.url 확인
+import { listProjects, getProjectDetail } from "@/api/projects";
 import type { ProjectListDto, ProjectStatus } from "@/types/domain";
 import { useAuth } from "@/stores/auth";
 import {
@@ -21,19 +21,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { toast } from "sonner"; // 안내 토스트
+import { toast } from "sonner";
 import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
 import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
-
-/* ▶ 추가 */
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
 
 /** 상태 -> 라벨 매핑 */
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -145,7 +135,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <GitBranch className="h-4 w-4 mr-1" />
             GitHub
           </Button>
-          {/* 학생도 피드백 열람이 필요하면 주석 해제
+          {/* 학생도 피드백 열람/작성 허용하려면 아래 주석 해제
           <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
             <MessageSquare className="h-4 w-4 mr-1" />
             피드백
@@ -165,11 +155,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <GitBranch className="h-4 w-4 mr-1" />
             GitHub
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setFeedbackProjectId(p.id)}
-          >
+          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
             <MessageSquare className="h-4 w-4 mr-1" />
             피드백
           </Button>
@@ -191,11 +177,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <Edit className="h-4 w-4 mr-1" />
           편집
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setFeedbackProjectId(p.id)}
-        >
+        <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
           <MessageSquare className="h-4 w-4 mr-1" />
           피드백
         </Button>
@@ -272,9 +254,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
                       </CardTitle>
 
                       {p.description && (
-                        <CardDescription className="text-sm">
-                          {p.description}
-                        </CardDescription>
+                        <CardDescription className="text-sm">{p.description}</CardDescription>
                       )}
 
                       <CardDescription className="text-sm">
@@ -337,7 +317,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       {/* 피드백 모달 — 너비는 유지, 높이 제한 + 다이얼로그 자체 스크롤 */}
       <Dialog open={feedbackProjectId != null} onOpenChange={(o) => !o && closeFeedback()}>
         <DialogContent className="sm:max-w-2xl w-[92vw] max-h-[85vh] overflow-y-auto p-0">
-          {/* 헤더는 스크롤 중에도 보이도록 고정 */}
           <DialogHeader className="sticky top-0 z-10 bg-background p-6 pb-4 border-b">
             <DialogTitle>프로젝트 피드백</DialogTitle>
             <DialogDescription className="sr-only">
