@@ -209,7 +209,12 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       const data = await listProjects({ isAdmin });
       setProjects(data ?? []);
 
-      toast.success("프로젝트가 복원되었습니다.");
+      // Switch to "all" tab to show the restored project
+      setTab("all");
+
+      toast.success("프로젝트가 복원되었습니다.", {
+        description: "복원된 프로젝트를 확인하려면 전체 탭을 확인하세요.",
+      });
     } catch (error) {
       console.error("Restore failed:", error);
       toast.error("복원에 실패했습니다.");
@@ -551,6 +556,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         onOpenChange={(open) => !open && setArchiveProject(null)}
         project={archiveProject}
         onSuccess={handleProjectArchived}
+        onRestore={handleProjectRestored}
       />
 
       {/* Purge confirmation modal */}

@@ -20,13 +20,15 @@ interface ArchiveConfirmModalProps {
   onOpenChange: (open: boolean) => void;
   project: ProjectListDto | null;
   onSuccess?: (projectId: number) => void;
+  onRestore?: (projectId: number) => void;
 }
 
 export function ArchiveConfirmModal({
   open,
   onOpenChange,
   project,
-  onSuccess
+  onSuccess,
+  onRestore
 }: ArchiveConfirmModalProps) {
   const [confirmText, setConfirmText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,10 +51,14 @@ export function ArchiveConfirmModal({
           label: "되돌리기",
           onClick: async () => {
             try {
-              const { restoreProject } = await import("@/api/projects");
-              await restoreProject(project.id);
-              toast.success("프로젝트가 복원되었습니다.");
-              onSuccess?.(project.id);
+              if (onRestore) {
+                onRestore(project.id);
+              } else {
+                const { restoreProject } = await import("@/api/projects");
+                await restoreProject(project.id);
+                toast.success("프로젝트가 복원되었습니다.");
+                onSuccess?.(project.id);
+              }
             } catch (error) {
               toast.error("복원에 실패했습니다.");
             }
