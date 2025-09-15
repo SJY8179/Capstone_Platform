@@ -7,7 +7,8 @@ export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 export interface CreateProjectRequest {
   title: string;
   description?: string;
-  teamName: string;
+  teamId?: number; // 기존 팀 선택
+  teamName?: string; // 새 팀 생성
   teamDescription?: string;
 }
 

@@ -11,7 +11,10 @@ public record CreateProjectRequest(
         @Size(max = 500, message = "프로젝트 설명은 500자를 초과할 수 없습니다.")
         String description,
 
-        @NotBlank(message = "팀 이름은 필수입니다.")
+        // 기존 팀 선택 (teamId가 있으면 기존 팀 사용)
+        Long teamId,
+
+        // 새 팀 생성 (teamId가 없으면 새 팀 생성)
         @Size(max = 80, message = "팀 이름은 80자를 초과할 수 없습니다.")
         String teamName,
 

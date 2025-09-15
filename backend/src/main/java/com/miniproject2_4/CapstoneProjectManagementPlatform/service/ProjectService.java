@@ -36,7 +36,7 @@ public class ProjectService {
                 .toList();
     }
 
-    /** 새 프로젝트 생성: 팀도 함께 생성하고 생성자를 팀 멤버로 추가 */
+    /** 새 프로젝트 생성: 기존 팀 선택 또는 새 팀 생성 */
     @Transactional
     public ProjectListDto createProject(CreateProjectRequest request, UserAccount creator) {
         if (creator == null) {
@@ -48,12 +48,33 @@ public class ProjectService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 새 프로젝트를 생성할 수 있습니다.");
         }
 
-        // 팀 생성
-        Team team = Team.builder()
-                .name(request.teamName())
-                .description(request.teamDescription())
-                .build();
-        team = teamRepository.save(team);
+        Team team;
+        boolean isNewTeam = false;
+
+        // 기존 팀 선택 vs 새 팀 생성
+        if (request.teamId() != null) {
+            // 기존 팀 선택
+            team = teamRepository.findById(request.teamId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "선택한 팀이 존재하지 않습니다."));
+
+            // 해당 팀의 멤버인지 확인
+            boolean isMember = teamMemberRepository.existsByTeam_IdAndUser_Id(team.getId(), creator.getId());
+            if (!isMember) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "선택한 팀의 멤버가 아닙니다.");
+            }
+        } else {
+            // 새 팀 생성
+            if (request.teamName() == null || request.teamName().trim().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "팀 이름은 필수입니다.");
+            }
+
+            team = Team.builder()
+                    .name(request.teamName().trim())
+                    .description(request.teamDescription())
+                    .build();
+            team = teamRepository.save(team);
+            isNewTeam = true;
+        }
 
         // 프로젝트 생성 (상태는 PLANNING으로 시작)
         Project project = Project.builder()
@@ -63,15 +84,17 @@ public class ProjectService {
                 .build();
         project = projectRepository.save(project);
 
-        // 생성자를 팀 멤버로 추가
-        TeamMemberId teamMemberId = new TeamMemberId(team.getId(), creator.getId());
-        TeamMember teamMember = TeamMember.builder()
-                .id(teamMemberId)
-                .team(team)
-                .user(creator)
-                .roleInTeam("MEMBER") // 기본적으로 멤버 역할
-                .build();
-        teamMemberRepository.save(teamMember);
+        // 새 팀을 생성한 경우에만 생성자를 팀 멤버로 추가
+        if (isNewTeam) {
+            TeamMemberId teamMemberId = new TeamMemberId(team.getId(), creator.getId());
+            TeamMember teamMember = TeamMember.builder()
+                    .id(teamMemberId)
+                    .team(team)
+                    .user(creator)
+                    .roleInTeam("MEMBER") // 기본적으로 멤버 역할
+                    .build();
+            teamMemberRepository.save(teamMember);
+        }
 
         return toListDto(project);
     }
