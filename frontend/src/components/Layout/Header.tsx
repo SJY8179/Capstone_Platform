@@ -27,6 +27,7 @@ interface AppUser {
 interface HeaderProps {
   user: AppUser;
   onLogout?: () => void;
+  onNotificationClick?: () => void;
   /** 프로젝트 스위처 */
     activeProjectId?: number | null;
     onChangeActiveProject?: (id: number) => void;
