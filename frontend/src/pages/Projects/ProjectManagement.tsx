@@ -280,7 +280,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setArchiveProject(p)}>
                 <Archive className="h-4 w-4 mr-2" />
-                아카이브
+                휴지통으로 이동
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -305,7 +305,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setArchiveProject(p)}>
                 <Archive className="h-4 w-4 mr-2" />
-                아카이브
+                휴지통으로 이동
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -392,7 +392,8 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <TabsTrigger value="review">검토중</TabsTrigger>
           <TabsTrigger value="completed">완료</TabsTrigger>
           <TabsTrigger value="archived" className="text-muted-foreground">
-            아카이브
+            <Archive className="h-4 w-4 mr-1" />
+            휴지통
           </TabsTrigger>
         </TabsList>
 
@@ -406,15 +407,18 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
               const nextDate = p.nextDeadline?.date ?? null;
               const teamName = p.team ?? "N/A";
 
+              const isArchived = tab === "archived";
+
               return (
-                <Card key={p.id}>
+                <Card key={p.id} className={isArchived ? "border-muted bg-muted/20" : ""}>
                   {/* 상단 */}
                   <CardHeader className="flex-row items-start justify-between space-y-0">
                     <div className="space-y-1">
                       <CardTitle className="flex items-center gap-2">
+                        {isArchived && <Archive className="h-4 w-4 text-muted-foreground" />}
                         {p.name}
-                        <Badge className="rounded-full px-2 py-0.5 text-xs" variant="outline">
-                          {STATUS_LABEL[p.status]}
+                        <Badge className="rounded-full px-2 py-0.5 text-xs" variant={isArchived ? "secondary" : "outline"}>
+                          {isArchived ? "휴지통" : STATUS_LABEL[p.status]}
                         </Badge>
                       </CardTitle>
 
@@ -478,10 +482,15 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
             {!loading && !loadingArchived && filtered.length === 0 && (
               <div className="text-center text-muted-foreground py-12">
-                {tab === "archived"
-                  ? "아카이브된 프로젝트가 없습니다."
-                  : "표시할 프로젝트가 없습니다."
-                }
+                {tab === "archived" ? (
+                  <div className="space-y-2">
+                    <Archive className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                    <p className="text-lg">휴지통이 비어있습니다</p>
+                    <p className="text-sm">삭제된 프로젝트가 여기에 표시됩니다</p>
+                  </div>
+                ) : (
+                  "표시할 프로젝트가 없습니다."
+                )}
               </div>
             )}
           </div>

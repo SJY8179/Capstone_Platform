@@ -43,8 +43,8 @@ export function ArchiveConfirmModal({
       setIsSubmitting(true);
       await archiveProject(project.id);
 
-      toast.success("프로젝트가 아카이브되었습니다.", {
-        description: "아카이브된 프로젝트는 휴지통에서 복원할 수 있습니다.",
+      toast.success("프로젝트가 휴지통으로 이동되었습니다.", {
+        description: "프로젝트 관리 > 휴지통 탭에서 복원할 수 있습니다.",
         action: {
           label: "되돌리기",
           onClick: async () => {
@@ -84,10 +84,10 @@ export function ArchiveConfirmModal({
     <AlertDialog open={open} onOpenChange={handleClose}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>프로젝트 아카이브</AlertDialogTitle>
+          <AlertDialogTitle>프로젝트를 휴지통으로 이동</AlertDialogTitle>
           <AlertDialogDescription>
-            프로젝트를 아카이브하면 기본 목록에서 숨겨집니다.
-            언제든지 휴지통에서 복원할 수 있습니다.
+            프로젝트가 휴지통으로 이동되어 기본 목록에서 숨겨집니다.
+            언제든지 프로젝트 관리의 휴지통 탭에서 복원할 수 있습니다.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -122,7 +122,7 @@ export function ArchiveConfirmModal({
             disabled={isSubmitting || confirmText !== project.name}
             className="bg-orange-600 hover:bg-orange-700"
           >
-            {isSubmitting ? "아카이브 중..." : "아카이브"}
+            {isSubmitting ? "휴지통으로 이동 중..." : "휴지통으로 이동"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
