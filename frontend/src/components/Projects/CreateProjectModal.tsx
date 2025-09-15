@@ -48,12 +48,18 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
     formState: { errors },
   } = useForm<FormData>();
 
-  // 팀 목록 로드
+  // 팀 목록 로드 및 폼 리셋
   useEffect(() => {
     if (open) {
       loadTeams();
+      // 모달이 열릴 때 폼 완전 리셋
+      reset({
+        title: "",
+        description: "",
+        teamId: "",
+      });
     }
-  }, [open]);
+  }, [open, reset]);
 
   const loadTeams = async () => {
     try {
@@ -83,7 +89,12 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
       toast.success("프로젝트가 생성됐어요.");
       onSuccess?.(newProject);
       onOpenChange(false);
-      reset();
+      // 성공 시에도 폼 리셋
+      reset({
+        title: "",
+        description: "",
+        teamId: "",
+      });
     } catch (error: any) {
       console.error("프로젝트 생성 실패:", error);
       toast.error("생성에 실패했어요. 다시 시도해주세요.");
@@ -95,7 +106,12 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
   const handleClose = () => {
     if (!isSubmitting) {
       onOpenChange(false);
-      reset();
+      // 모달 닫을 때도 폼 리셋
+      reset({
+        title: "",
+        description: "",
+        teamId: "",
+      });
     }
   };
 
