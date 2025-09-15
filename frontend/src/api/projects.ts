@@ -1,5 +1,5 @@
 ﻿import { http } from "@/api/http";
-import type { ProjectListDto, ProjectStatus, ProjectDetailDto } from "@/types/domain";
+import type { ProjectListDto, ProjectStatus, ProjectDetailDto, CreateProjectRequest } from "@/types/domain";
 
 /** 상태 문자열을 우리 타입으로 통일 */
 function normalizeStatus(raw: any): ProjectStatus {
@@ -326,6 +326,12 @@ export async function listMyProjects(): Promise<ProjectListDto[]> {
 export async function listProjects(opts?: { isAdmin?: boolean }): Promise<ProjectListDto[]> {
   if (opts?.isAdmin) return listProjectsAll();
   return listMyProjects();
+}
+
+/** 새 프로젝트 생성 */
+export async function createProject(request: CreateProjectRequest): Promise<ProjectListDto> {
+  const { data } = await http.post("/projects", request);
+  return normalizeProject(data);
 }
 
 /** 프로젝트 상세 */

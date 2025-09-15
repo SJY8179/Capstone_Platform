@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.CreateProjectRequest;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectDetailDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
@@ -21,6 +22,7 @@ import java.util.*;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
@@ -32,6 +34,46 @@ public class ProjectService {
         return projectRepository.findAllWithTeam().stream()
                 .map(this::toListDto)
                 .toList();
+    }
+
+    /** 새 프로젝트 생성: 팀도 함께 생성하고 생성자를 팀 멤버로 추가 */
+    @Transactional
+    public ProjectListDto createProject(CreateProjectRequest request, UserAccount creator) {
+        if (creator == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
+        // 학생만 새 프로젝트를 생성할 수 있도록 제한 (프롬프트 요구사항에 따라)
+        if (creator.getRole() != Role.STUDENT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 새 프로젝트를 생성할 수 있습니다.");
+        }
+
+        // 팀 생성
+        Team team = Team.builder()
+                .name(request.teamName())
+                .description(request.teamDescription())
+                .build();
+        team = teamRepository.save(team);
+
+        // 프로젝트 생성 (상태는 PLANNING으로 시작)
+        Project project = Project.builder()
+                .title(request.title())
+                .team(team)
+                .status(Project.Status.PLANNING)
+                .build();
+        project = projectRepository.save(project);
+
+        // 생성자를 팀 멤버로 추가
+        TeamMemberId teamMemberId = new TeamMemberId(team.getId(), creator.getId());
+        TeamMember teamMember = TeamMember.builder()
+                .id(teamMemberId)
+                .team(team)
+                .user(creator)
+                .roleInTeam("MEMBER") // 기본적으로 멤버 역할
+                .build();
+        teamMemberRepository.save(teamMember);
+
+        return toListDto(project);
     }
 
     /**

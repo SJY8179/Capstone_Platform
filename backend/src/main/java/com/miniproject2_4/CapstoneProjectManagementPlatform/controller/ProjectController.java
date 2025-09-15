@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.CreateProjectRequest;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectDetailDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
@@ -11,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -24,6 +26,14 @@ public class ProjectController {
     @GetMapping("/projects")
     public List<ProjectListDto> list() {
         return projectService.listProjects();
+    }
+
+    /** 새 프로젝트 생성: /api/projects */
+    @PostMapping("/projects")
+    @Transactional
+    public ProjectListDto createProject(@Valid @RequestBody CreateProjectRequest request, Authentication auth) {
+        UserAccount ua = ensureUser(auth);
+        return projectService.createProject(request, ua);
     }
 
     /** 내가 속한 프로젝트(+교수 담당 프로젝트 포함): /api/projects/my  — ★일관된 DTO로 반환 */

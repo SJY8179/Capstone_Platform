@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
 import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
+import CreateProjectModal from "@/components/Projects/CreateProjectModal";
 
 /** 상태 -> 라벨 매핑 */
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -64,6 +65,14 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   // 상세(열람) 모달
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
   const closeDetail = () => setDetailProjectId(null);
+
+  // 프로젝트 생성 모달
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const handleProjectCreated = (newProject: ProjectListDto) => {
+    // 새 프로젝트를 목록에 추가 (맨 앞에 추가)
+    setProjects(prev => [newProject, ...prev]);
+  };
 
   useEffect(() => {
     (async () => {
@@ -198,7 +207,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </p>
         </div>
         {userRole === "student" && (
-          <Button>
+          <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             새 프로젝트
           </Button>
@@ -354,6 +363,13 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 프로젝트 생성 모달 */}
+      <CreateProjectModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onSuccess={handleProjectCreated}
+      />
     </div>
   );
 }
