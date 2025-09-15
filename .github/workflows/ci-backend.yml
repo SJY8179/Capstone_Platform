@@ -18,4 +18,4 @@ jobs:
         working-directory: backend
         run: |
           chmod +x ./mvnw || true
-          ./mvnw -q -DskipTests -f pom.xml package
+          ./mvnw -q -DskipTests package

@@ -1,4 +1,5 @@
 /backend/target/
+/backend/.mvn/
 /backend/.idea/
 /backend/build/
 /frontend/node_modules/
