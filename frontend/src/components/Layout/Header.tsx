@@ -66,7 +66,7 @@ const demoNotifications: Notification[] = [
   }
 ];
 
-export function Header({ user, onLogout, activeProjectId, onNotificationClick }: HeaderProps) {
+export function Header({ user, onLogout, activeProjectId, onNotificationClick, onChangeActiveProject}: HeaderProps) {
   const [notifications, setNotifications] = useState<Notification[]>(demoNotifications);
 
   const handleMarkAsRead = (id: string) => {
@@ -110,7 +110,10 @@ export function Header({ user, onLogout, activeProjectId, onNotificationClick }:
     };
 
     const avatarSrc =
-        (user as any).avatarUrl ?? (user as any).avatar ?? undefined;
+      [ (user as any)?.avatarUrl, (user as any)?.avatar ]
+        .map(v => (typeof v === "string" ? v.trim() : ""))  // 빈문자 처리
+        .find(v => v.length > 0) || undefined;
+
 
   return (
     <header className="h-16 border-b bg-background px-6 flex items-center justify-between">
