@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import FeedbackPanel from "@/components/Feedback/FeedbackPanel";
 import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
 import CreateProjectModal from "@/components/Projects/CreateProjectModal";
+import { listTeams } from "@/api/teams";
 
 /** 상태 -> 라벨 매핑 */
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -72,6 +73,24 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   const handleProjectCreated = (newProject: ProjectListDto) => {
     // 새 프로젝트를 목록에 추가 (맨 앞에 추가)
     setProjects(prev => [newProject, ...prev]);
+  };
+
+  const handleCreateProjectClick = async () => {
+    try {
+      // 팀 목록 확인
+      const teams = await listTeams();
+      if (teams.length === 0) {
+        toast.error("프로젝트를 생성하려면 먼저 팀을 생성해야 합니다.", {
+          description: "팀 관리 페이지에서 새 팀을 생성한 후 다시 시도해주세요.",
+        });
+        return;
+      }
+      // 팀이 있으면 모달 열기
+      setShowCreateModal(true);
+    } catch (error) {
+      console.error("팀 목록 확인 실패:", error);
+      toast.error("팀 목록을 확인하는데 실패했습니다.");
+    }
   };
 
   useEffect(() => {
@@ -207,7 +226,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </p>
         </div>
         {userRole === "student" && (
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button onClick={handleCreateProjectClick}>
             <Plus className="h-4 w-4 mr-2" />
             새 프로젝트
           </Button>

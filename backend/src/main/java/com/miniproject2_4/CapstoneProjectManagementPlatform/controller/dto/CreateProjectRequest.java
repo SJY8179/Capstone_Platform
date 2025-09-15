@@ -1,6 +1,7 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateProjectRequest(
@@ -11,13 +12,6 @@ public record CreateProjectRequest(
         @Size(max = 500, message = "프로젝트 설명은 500자를 초과할 수 없습니다.")
         String description,
 
-        // 기존 팀 선택 (teamId가 있으면 기존 팀 사용)
-        Long teamId,
-
-        // 새 팀 생성 (teamId가 없으면 새 팀 생성)
-        @Size(max = 80, message = "팀 이름은 80자를 초과할 수 없습니다.")
-        String teamName,
-
-        @Size(max = 200, message = "팀 설명은 200자를 초과할 수 없습니다.")
-        String teamDescription
+        @NotNull(message = "팀을 선택해야 합니다.")
+        Long teamId
 ) {}
