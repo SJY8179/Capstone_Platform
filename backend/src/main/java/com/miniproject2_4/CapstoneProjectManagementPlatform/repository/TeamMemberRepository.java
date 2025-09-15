@@ -19,15 +19,13 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemb
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
 
     /**
-     * 팀 구성원 + 사용자 정보까지 함께 로드 (이름 오름차순 정렬)
+     * 팀 구성원 + 사용자 정보까지 함께 로드
      * - TeamService/ProjectService에서 사용
      */
     @Query("""
-        select tm
-          from TeamMember tm
-          join fetch tm.user u
-         where tm.team.id = :teamId
-         order by u.name asc
+       select tm from TeamMember tm
+       join fetch tm.user u
+       where tm.team.id = :teamId
     """)
     List<TeamMember> findWithUserByTeamId(@Param("teamId") Long teamId);
 

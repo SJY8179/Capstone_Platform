@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/professor/reviews") // (앱 전역 prefix가 /api라면 그대로 사용)
+@RequestMapping("/professor/reviews")
 public class ProfessorReviewController {
 
     private final ProfessorReviewService reviewService;
@@ -29,7 +29,10 @@ public class ProfessorReviewController {
         return ua.getId();
     }
 
-    /** 교수 검토 목록 조회 (PENDING) */
+    /**
+     * 교수 검토 목록 조회 (PENDING + ONGOING 마감임박/지남)
+     * GET /api/professor/reviews?days=7&limit=50
+     */
     @GetMapping
     public List<ProfessorReviewDto.ReviewItem> list(
             Authentication auth,
@@ -40,7 +43,10 @@ public class ProfessorReviewController {
         return reviewService.listPendingReviews(userId, days, limit);
     }
 
-    /** 일괄 승인/반려 */
+    /**
+     * 일괄 승인/반려
+     * POST /api/professor/reviews/bulk
+     */
     @PostMapping("/bulk")
     public ProfessorReviewDto.BulkResult bulk(
             Authentication auth,
@@ -51,27 +57,5 @@ public class ProfessorReviewController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "처리할 항목이 없습니다.");
         }
         return reviewService.bulkReview(userId, req);
-    }
-
-    /** 메모 단독 저장 */
-    @PostMapping("/note")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void addNote(
-            Authentication auth,
-            @RequestBody ProfessorReviewDto.NoteRequest req
-    ) {
-        Long userId = currentUserId(auth);
-        reviewService.addNote(userId, req);
-    }
-
-    /** 검토 이력 조회 */
-    @GetMapping("/{assignmentId}/history")
-    public List<ProfessorReviewDto.HistoryItem> history(
-            Authentication auth,
-            @PathVariable Long assignmentId
-    ) {
-        Long userId = currentUserId(auth);
-        // 단순 조회: 소유/권한 검사는 서비스에서 과제 존재여부로 처리
-        return reviewService.getHistory(assignmentId);
     }
 }

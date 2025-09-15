@@ -100,7 +100,7 @@ public class DashboardService {
     /* ========= 교수 대시보드 요약 ========= */
     /**
      * “검토 대기”는 **PENDING만** 포함.
-     * - 반려(Reject) 시 ONGOING 으로 변경되므로 목록/카운트에서 제외.
+     * - 반려 시 ONGOING 으로 바꾸면 목록에 재등장하지 않음.
      */
     public ProfessorSummaryDto getProfessorSummary(Long professorUserId) {
         // 담당/참여 교수 기준: 팀 멤버십으로 연계

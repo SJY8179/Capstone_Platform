@@ -31,27 +31,14 @@ public class ScheduleController {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 올바르지 않습니다.");
     }
 
-    private UserAccount currentUser(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
-        }
-        Object p = auth.getPrincipal();
-        if (p instanceof UserAccount ua) return ua;
-        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
-    }
-
     @GetMapping("/schedules")
     public List<ScheduleDto> list() {
         return scheduleService.listSchedules();
     }
 
-    /**
-     * (레거시) /api/schedules/range
-     * - 교수/관리자도 볼 수 있게 가드를 'assertCanViewProject'로 완화
-     * - projectId 없으면 빈 배열
-     */
+    /** /api/schedules/range?from=YYYY-MM-DD&to=YYYY-MM-DD&projectId=1&onlyEvents=true */
     @GetMapping("/schedules/range")
-    public List<ScheduleDto> listInRangeLegacy(
+    public List<ScheduleDto> listInRange(
             @RequestParam String from,
             @RequestParam String to,
             @RequestParam(required = false) Long projectId,
@@ -59,30 +46,11 @@ public class ScheduleController {
             @RequestParam(defaultValue = "false") boolean onlyEvents,
             Authentication auth
     ) {
-        if (projectId == null) return Collections.emptyList();
-
-        // ✅ 교수/관리자/팀 멤버 모두 열람 허용
-        projectAccessGuard.assertCanViewProject(projectId, currentUser(auth));
-
-        LocalDate fromD = LocalDate.parse(from);
-        LocalDate toD   = LocalDate.parse(to);
-        return scheduleService.listSchedulesInRange(projectId, teamId, fromD, toD, onlyEvents);
-    }
-
-    /**
-     * ✅ 정식 경로: /api/projects/{projectId}/schedules/range?from=YYYY-MM-DD&to=YYYY-MM-DD&onlyEvents=true
-     */
-    @GetMapping("/projects/{projectId}/schedules/range")
-    public List<ScheduleDto> listInRange(
-            @PathVariable Long projectId,
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam(required = false) Long teamId,
-            @RequestParam(defaultValue = "false") boolean onlyEvents,
-            Authentication auth
-    ) {
-        projectAccessGuard.assertCanViewProject(projectId, currentUser(auth));
-
+        // projectId가 없으면 프론트는 빈 캘린더를 원함 → 빈 배열 반환
+        if (projectId == null) {
+            return Collections.emptyList();
+        }
+        projectAccessGuard.assertMember(projectId, currentUserId(auth));
         LocalDate fromD = LocalDate.parse(from);
         LocalDate toD   = LocalDate.parse(to);
         return scheduleService.listSchedulesInRange(projectId, teamId, fromD, toD, onlyEvents);

@@ -30,25 +30,18 @@ public class TeamService {
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    /** (관리자) 전체 팀: /api/teams */
+    /** 전체 팀: /api/teams */
     public List<TeamListDto.Response> listTeams() {
         return teamRepository.findAll().stream()
                 .map(this::convertToDto)
-                .toList();
+                .collect(Collectors.toList());
     }
 
-    /** (공통) 내가 속한 팀만: /api/teams/my */
+    /** 내가 속한 팀만 */
     public List<TeamListDto.Response> listTeamsForUser(Long userId) {
         return teamRepository.findAllByMemberUserId(userId).stream()
                 .map(this::convertToDto)
-                .toList();
-    }
-
-    /** (교수) 내가 '담당 교수'인 프로젝트의 팀: /api/teams/teaching */
-    public List<TeamListDto.Response> listTeamsForProfessor(Long professorUserId) {
-        return teamRepository.findAllByProfessorUserId(professorUserId).stream()
-                .map(this::convertToDto)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     /** /api/teams/{teamId}/invitable-users **/
@@ -63,7 +56,8 @@ public class TeamService {
                 .toList();
     }
 
-    /** /api/teams **/ @Transactional
+    /** /api/teams **/
+    @Transactional
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
         UserAccount creator = findUserById(userId);
 
@@ -85,7 +79,8 @@ public class TeamService {
         return convertToDto(newTeam);
     }
 
-    /** /api/teams/{teamId}/members **/ @Transactional
+    /** /api/teams/{teamId}/members **/
+    @Transactional
     public void addMember(Long teamId, Long userId, Long requesterId) {
         checkMemberPermission(teamId, requesterId);
 
@@ -134,6 +129,7 @@ public class TeamService {
         TeamMember member = findTeamMemberById(teamId, memberId);
 
         if (toRole(member.getRoleInTeam()) == TeamRole.LEADER) {
+            // throw new BusinessLogicException(ErrorCode.LEADER_CANNOT_BE_REMOVED);
             throw new IllegalStateException("팀 리더는 팀에서 삭제할 수 없습니다. 먼저 리더를 변경해주세요.");
         }
         teamMemberRepository.delete(member);
@@ -161,14 +157,14 @@ public class TeamService {
         return TeamRole.MEMBER;
     }
 
-    /** 요청자가 해당 팀의 멤버인지 확인 */
+    /** 요청자가 해당 팀의 멤버인지 확인하는 권한 검사 메서드 */
     private void checkMemberPermission(Long teamId, Long userId) {
         if (!teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, userId)) {
             throw new AccessDeniedException("팀에 소속된 멤버만 이 작업을 수행할 수 있습니다.");
         }
     }
 
-    /** 요청자가 팀의 리더인지 확인 */
+    /** 요청자가 팀의 리더인지 확인하는 권한 검사 메서드 */
     private void checkLeaderPermission(Long teamId, Long userId) {
         TeamMember requester = findTeamMemberById(teamId, userId);
         if (toRole(requester.getRoleInTeam()) != TeamRole.LEADER) {
@@ -176,7 +172,6 @@ public class TeamService {
         }
     }
 
-    /** Team → TeamListDto.Response 변환 (팀원 구현 구조 유지) */
     private TeamListDto.Response convertToDto(Team team) {
         // 프로젝트명 조회
         String projectTitle = projectRepository.findByTeam_Id(team.getId())
@@ -187,7 +182,7 @@ public class TeamService {
         List<TeamMember> teamMembers = teamMemberRepository.findWithUserByTeamId(team.getId());
         if (teamMembers == null) teamMembers = Collections.emptyList();
 
-        // 통계(회의/과제) 조회
+        // 통계(회의/과제) 조회 - 존재하는 리포지토리 메서드만 사용
         Long projectId = projectRepository.findByTeam_Id(team.getId())
                 .map(Project::getId)
                 .orElse(null);
@@ -206,7 +201,7 @@ public class TeamService {
         }
 
         TeamListDto.Response.Stats stats = new TeamListDto.Response.Stats(
-                0, // 커밋 집계는 미연결 → 0
+                0, // 커밋 집계 소스는 없음 -> 0
                 meetings,
                 new TeamListDto.Response.Tasks(completedTasks, totalTasks)
         );
@@ -228,4 +223,5 @@ public class TeamService {
         return teamMemberRepository.findById(new TeamMemberId(teamId, userId))
                 .orElseThrow(() -> new EntityNotFoundException("해당 팀원을 찾을 수 없습니다: " + userId));
     }
+
 }

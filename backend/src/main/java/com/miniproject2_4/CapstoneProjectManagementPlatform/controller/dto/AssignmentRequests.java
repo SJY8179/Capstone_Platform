@@ -7,8 +7,7 @@ public class AssignmentRequests {
 
     public record Create(
             @NotBlank String title,
-            // "yyyy-MM-dd'T'HH:mm:ss" 혹은 "yyyy-MM-dd"
-            // 서비스에서 날짜만 오면 23:59로 보정, null/blank면 +7일 23:59 기본값
+            // "yyyy-MM-dd'T'HH:mm:ss" 혹은 "yyyy-MM-dd" (시간 없으면 23:59 로 보정)
             String dueDateIso,
             AssignmentStatus status // null -> PENDING
     ) {}
