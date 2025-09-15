@@ -57,8 +57,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<?> status(ResponseStatusException e) {
+        String code = e.getReason(); // guard에서 설정한 사유코드
         return ResponseEntity.status(e.getStatusCode())
-                .body(Map.of("message", e.getReason()));
+                .body(Map.of(
+                        "code", code != null ? code : e.getStatusCode().toString(),
+                        "message", code != null ? code : "ERROR"
+                ));
     }
 
     @ExceptionHandler({ DataAccessException.class, RuntimeException.class })

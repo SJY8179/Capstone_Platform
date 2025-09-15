@@ -3,16 +3,16 @@ package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.MemberReq;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.TeamListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.UserDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.TeamService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -32,6 +32,19 @@ public class TeamController {
     @GetMapping("/my")
     public ResponseEntity<List<TeamListDto.Response>> myTeams(@AuthenticationPrincipal UserAccount user) {
         return ResponseEntity.ok(teamService.listTeamsForUser(user.getId()));
+    }
+
+    /** (교수 전용) 내가 '담당 교수'인 프로젝트의 팀 */
+    @GetMapping("/teaching")
+    public ResponseEntity<List<TeamListDto.Response>> teaching(@AuthenticationPrincipal UserAccount user) {
+        if (user.getRole() == Role.ADMIN) {
+            // 관리자는 전체 허용 (요청/정책에 따라 조정 가능)
+            return ResponseEntity.ok(teamService.listTeams());
+        }
+        if (user.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_ALLOWED_TO_VIEW");
+        }
+        return ResponseEntity.ok(teamService.listTeamsForProfessor(user.getId()));
     }
 
     /** 초대 가능한 유저 **/
@@ -97,11 +110,4 @@ public class TeamController {
         teamService.deleteTeam(teamId, requester.getId());
         return ResponseEntity.noContent().build();
     }
-
-//    private UserAccount getAuthenticatedUser(Authentication auth) {
-//        if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof UserAccount user)) {
-//            throw new AccessDeniedException("인증 정보가 유효하지 않습니다.");
-//        }
-//        return user;
-//    }
 }

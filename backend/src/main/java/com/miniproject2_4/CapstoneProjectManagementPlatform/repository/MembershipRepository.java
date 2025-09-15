@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 프로젝트-사용자 소속 여부 확인 전용 리포지토리.
  * 스키마: project(team_id) ←→ team_member(team_id)
+ *
+ * ProjectAccessGuard 등에서 existsMembership(projectId, userId)를 사용합니다.
  */
 @Repository
 public class MembershipRepository {
@@ -16,25 +18,43 @@ public class MembershipRepository {
     private EntityManager em;
 
     /**
-     * 사용자가 해당 프로젝트의 팀에 속해있는지 여부
-     * project.team_id 와 team_member.team_id 를 직접 조인
+     * 사용자가 해당 프로젝트의 팀에 속해있는지 여부.
+     *
+     * JPQL 버전(인터페이스 구현의 @Query와 동일한 의미):
+     *   tm.team.id = (select p.team.id from Project p where p.id = :projectId)
+     *   and tm.user.id = :userId
      */
     @Transactional(readOnly = true)
     public boolean existsMembership(Long projectId, Long userId) {
-        Object result = em.createNativeQuery("""
-                SELECT COUNT(*)
-                  FROM project p
-                  JOIN team_member tm ON tm.team_id = p.team_id
-                 WHERE p.id       = ?1
-                   AND tm.user_id = ?2
-                """)
-                .setParameter(1, projectId)
-                .setParameter(2, userId)
+        Long cnt = em.createQuery("""
+                select count(tm)
+                  from TeamMember tm
+                 where tm.team.id = (select p.team.id from Project p where p.id = :projectId)
+                   and tm.user.id = :userId
+                """, Long.class)
+                .setParameter("projectId", projectId)
+                .setParameter("userId", userId)
                 .getSingleResult();
 
-        long cnt = (result instanceof Number)
-                ? ((Number) result).longValue()
-                : Long.parseLong(String.valueOf(result));
-        return cnt > 0L;
+        return cnt != null && cnt > 0L;
+    }
+
+    /**
+     * (옵션) teamId가 이미 있는 경우 직접 확인하는 경로.
+     *  성능상 유리할 수 있어 추가 제공.
+     */
+    @Transactional(readOnly = true)
+    public boolean existsMembershipByTeamId(Long teamId, Long userId) {
+        Long cnt = em.createQuery("""
+                select count(tm)
+                  from TeamMember tm
+                 where tm.team.id = :teamId
+                   and tm.user.id = :userId
+                """, Long.class)
+                .setParameter("teamId", teamId)
+                .setParameter("userId", userId)
+                .getSingleResult();
+
+        return cnt != null && cnt > 0L;
     }
 }

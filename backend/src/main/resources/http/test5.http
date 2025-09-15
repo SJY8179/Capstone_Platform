@@ -1,0 +1,45 @@
+### 공통 변수
+@host = http://localhost:8080/api
+@pid = 1
+
+### [관리자] 로그인
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@a.com",
+  "password": "111111"
+}
+> {%
+    const data = (typeof response.body === 'string') ? JSON.parse(response.body) : response.body;
+    client.global.set("adminToken", data.accessToken);
+%}
+
+### [관리자] 임의의 프로젝트 ID (수동 지정 또는 /projects 조회)
+@pid_admin = 1
+
+### [관리자] 목록 (200)
+GET {{host}}/projects/{{pid_admin}}/feedback?limit=5
+Authorization: Bearer {{adminToken}}
+
+### [관리자] 작성 (201)
+POST {{host}}/projects/{{pid_admin}}/feedback
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "content": "관리자 코멘트" }
+> {%
+    const data = (typeof response.body === 'string') ? JSON.parse(response.body) : response.body;
+    client.global.set("fbId_admin", String(data.id));
+%}
+
+### [관리자] 수정 (200)
+PATCH {{host}}/projects/{{pid_admin}}/feedback/{{fbId_admin}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "content": "관리자 코멘트(수정)" }
+
+### [관리자] 삭제 (204)
+DELETE {{host}}/projects/{{pid_admin}}/feedback/{{fbId_admin}}
+Authorization: Bearer {{adminToken}}

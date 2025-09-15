@@ -1,6 +1,7 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.AssignmentDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.RequestReviewDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Assignment;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.AssignmentStatus;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.AssignmentService;
@@ -63,10 +64,7 @@ public class AssignmentController {
         assignmentService.delete(projectId, id);
     }
 
-    /** POST /api/projects/{projectId}/assignments/status-bulk
-     * 같은 프로젝트에 속한 과제들에 한해 일괄 상태 변경.
-     * 잘못된 ID(다른 프로젝트 소속)는 조용히 무시합니다.
-     */
+    /** POST /api/projects/{projectId}/assignments/status-bulk */
     @PostMapping("/status-bulk")
     @Transactional
     public void bulkChange(@PathVariable Long projectId, @RequestBody BulkReq req) {
@@ -79,5 +77,16 @@ public class AssignmentController {
                 // 다른 프로젝트 소속/없는 ID 등은 무시
             }
         }
+    }
+
+    /** PATCH /api/projects/{projectId}/assignments/{id}/request-review */
+    @PatchMapping("/{id}/request-review")
+    public AssignmentDto requestReview(@PathVariable Long projectId,
+                                       @PathVariable Long id,
+                                       @RequestBody(required = false) RequestReviewDto body,
+                                       @RequestHeader(name = "X-USER-ID", required = false) Long userIdOptional) {
+        Assignment a = assignmentService.requestReview(projectId, id, userIdOptional,
+                body != null ? body.message() : null);
+        return AssignmentDto.of(a);
     }
 }
