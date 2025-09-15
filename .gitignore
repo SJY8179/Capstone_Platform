@@ -43,3 +43,8 @@ frontend/node_modules/
 .vite/
 frontend/.vite/
 
+
+# Vite build
+frontend/dist/
+dist/
+
