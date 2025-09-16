@@ -18,13 +18,16 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping(value = "/teams") // context-path=/api 적용됨 → /api/teams
+@RequestMapping(value = "/teams")
 public class TeamController {
     private final TeamService teamService;
 
-    /** (관리자/전체 조회) */
+    /** (관리자 전용) 전체 팀 목록 */
     @GetMapping
-    public ResponseEntity<List<TeamListDto.Response>> listItems() {
+    public ResponseEntity<List<TeamListDto.Response>> listItems(@AuthenticationPrincipal UserAccount user) {
+        if (user == null || user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_ALLOWED_TO_VIEW");
+        }
         return ResponseEntity.ok(teamService.listTeams());
     }
 
@@ -38,7 +41,7 @@ public class TeamController {
     @GetMapping("/teaching")
     public ResponseEntity<List<TeamListDto.Response>> teaching(@AuthenticationPrincipal UserAccount user) {
         if (user.getRole() == Role.ADMIN) {
-            // 관리자는 전체 허용 (요청/정책에 따라 조정 가능)
+            // 관리자는 전체 허용
             return ResponseEntity.ok(teamService.listTeams());
         }
         if (user.getRole() != Role.PROFESSOR) {
@@ -125,6 +128,12 @@ public class TeamController {
             @AuthenticationPrincipal UserAccount requester) {
         teamService.deleteTeam(teamId, requester.getId());
         return ResponseEntity.noContent().build();
+    }
+
+    /** 팀의 교수 목록 조회 */
+    @GetMapping("/{teamId}/professors")
+    public ResponseEntity<List<UserDto>> listProfessors(@PathVariable Long teamId) {
+        return ResponseEntity.ok(teamService.listTeamMembersByRole(teamId, Role.PROFESSOR));
     }
 
     /** 모든 팀에서 교수/강사 제거 (관리자 전용) */

@@ -14,15 +14,25 @@ import {
   Users,
   BookOpen,
   Database,
-  Activity,
+  Activity as ActivityIcon,
   TrendingUp,
   Settings,
   Download,
   Plus
 } from "lucide-react";
 import { listProjects } from "@/api/projects";
-import { getProjectDashboardStatus } from "@/api/dashboard";
-import type { ProjectListDto, ProjectStatus, DashboardStatus } from "@/types/domain";
+import {
+  getProjectDashboardStatus,
+  getAdminSummary,
+  getAdminActivity,
+} from "@/api/dashboard";
+import type {
+  ProjectListDto,
+  ProjectStatus,
+  DashboardStatus,
+  AdminSummary,
+  SystemActivity,
+} from "@/types/domain";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +56,8 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 export function AdminDashboard({ projectId }: AdminDashboardProps) {
   const [projects, setProjects] = useState<ProjectListDto[]>([]);
   const [status, setStatus] = useState<DashboardStatus | null>(null);
+  const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
+  const [activities, setActivities] = useState<SystemActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
@@ -53,18 +65,23 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // 프로젝트 목록은 항상 가능
-        const projectData = await listProjects();
+
+        const [projectData, summaryData, activityData] = await Promise.all([
+          listProjects().catch(() => []),
+          getAdminSummary().catch(() => null),
+          getAdminActivity(20).catch(() => []),
+        ]);
+
         setProjects(projectData);
+        setAdminSummary(summaryData);
+        setActivities(activityData);
 
-        // projectId 없으면 상태는 N/A
-        if (!projectId) {
+        if (projectId) {
+          const statusData = await getProjectDashboardStatus(projectId);
+          setStatus(statusData);
+        } else {
           setStatus(null);
-          return;
         }
-
-        const statusData = await getProjectDashboardStatus(projectId);
-        setStatus(statusData);
       } catch (error) {
         console.error("Failed to fetch admin dashboard data:", error);
       } finally {
@@ -76,13 +93,13 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
   }, [projectId]);
 
   const systemStats = {
-    totalUsers: "N/A", // TODO: 사용자 수 API
-    activeCourses: "N/A", // TODO: 과목 수 API
-    totalProjects: projects.length,
-    systemUptime: 99.9,
+    totalUsers: adminSummary?.totalUsers ?? "N/A",
+    activeCourses: adminSummary?.activeCourses ?? "N/A",
+    totalProjects: adminSummary?.activeProjects ?? projects.length,
+    systemUptime: adminSummary?.uptimePct ?? 99.9,
   };
 
-  // 진행률을 바탕으로 헬스 레벨 산출
+  // 진행률을 바탕으로 헬스 레벨 산출 (선택 프로젝트 기준)
   const healthLevel = useMemo<"healthy" | "warning" | "error">(() => {
     const pct = status?.progressPct ?? 0;
     if (pct >= 80) return "healthy";
@@ -240,24 +257,40 @@ export function AdminDashboard({ projectId }: AdminDashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 최근 시스템 활동 (예시) */}
+        {/* 최근 시스템 활동 */}
         <Card>
           <CardHeader>
             <CardTitle>최근 시스템 활동</CardTitle>
             <CardDescription>
-              시스템 활동 로그를 표시하려면 별도 API가 필요합니다.
+              전 프로젝트의 이벤트를 최신순으로 표시합니다.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8 text-muted-foreground">
-              <Activity className="h-8 w-8 mx-auto mb-2" />
-              <p>활동 로그를 표시하려면 API 연동이 필요합니다.</p>
-            </div>
+            {activities.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <ActivityIcon className="h-8 w-8 mx-auto mb-2" />
+                <p>표시할 활동이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activities.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{a.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {a.type} • {a.projectTitle ?? "-"} • {a.startAt ? new Date(a.startAt).toLocaleString("ko-KR") : "N/A"}
+                      </p>
+                    </div>
+                    <Badge variant="outline">{a.type}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* 캘린더 위젯 */}
+      {/* 캘린더 위젯 (선택 프로젝트 기준) */}
       <CalendarWidget projectId={projectId} />
 
       {/* 시스템 상태 */}

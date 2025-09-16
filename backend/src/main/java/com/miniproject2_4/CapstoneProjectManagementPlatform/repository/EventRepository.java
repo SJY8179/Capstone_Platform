@@ -2,6 +2,7 @@ package com.miniproject2_4.CapstoneProjectManagementPlatform.repository;
 
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Event;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.EventType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -34,4 +35,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     List<Event> findByProject_IdAndStartAtBetweenOrderByStartAtAsc(
             Long projectId, LocalDateTime from, LocalDateTime to);
+
+    /** 추가: 전 프로젝트 대상 최신 활동 (관리자 대시보드) */
+    List<Event> findByProject_ArchivedFalseOrderByStartAtDesc(Pageable pageable);
 }

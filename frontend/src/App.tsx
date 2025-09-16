@@ -32,8 +32,8 @@ export type ActivePage =
   | "users"
   | "schedule"
   | "assignments"
-  | "notifications"   // ✅ 추가
-  | "settings";       // ✅ 유지
+  | "notifications"
+  | "settings";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);

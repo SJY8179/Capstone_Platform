@@ -46,7 +46,10 @@ public class TeamService {
                 .toList();
     }
 
-    /** /api/teams/{teamId}/invitable-users **/
+    /** /api/teams/{teamId}/invitable-users
+     * 팀원 초대 가능 목록 - 교수와 TA는 제외 (학생과 관리자만 초대 가능)
+     * 교수는 별도의 "교수 추가" 기능을 통해서만 추가
+     **/
     public List<UserDto> findInvitableUsers(Long teamId) {
         Set<Long> memberIds = teamMemberRepository.findWithUserByTeamId(teamId).stream()
                 .map(tm -> tm.getUser().getId())
@@ -54,11 +57,25 @@ public class TeamService {
 
         return userRepository.findAll().stream()
                 .filter(user -> !memberIds.contains(user.getId()))
+                .filter(user -> user.getRole() != Role.PROFESSOR && user.getRole() != Role.TA)
                 .map(user -> new UserDto(user.getId(), user.getName(), user.getEmail()))
                 .toList();
     }
 
-    /** 팀 생성: 새 팀 + (필요 시) 새 프로젝트 자동 생성 */
+    public List<UserDto> listTeamMembersByRole(Long teamId, Role role) {
+        return teamMemberRepository.findUsersByTeamIdAndRole(teamId, role).stream()
+                .map(u -> new UserDto(u.getId(), u.getName(), u.getEmail()))
+                .toList();
+    }
+
+    /**
+     * 팀 생성
+     *
+     * ⚠️ 트리거 충돌 방지를 위해 '팀 생성 시 자동 프로젝트 생성'을 하지 않습니다.
+     *    프로젝트는 이후 /projects API로 분리 생성하세요.
+     *
+     * 팀 생성자는 역할에 관계없이 리더로 추가됩니다.
+     */
     @Transactional
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
         UserAccount creator = findUserById(userId);
@@ -70,29 +87,17 @@ public class TeamService {
                 .build();
         teamRepository.save(newTeam);
 
-        // 2) 생성자를 팀장으로 추가
-        TeamMemberId teamMemberId = new TeamMemberId(newTeam.getId(), creator.getId());
-        TeamMember creatorAsLeader = TeamMember.builder()
-                .id(teamMemberId)
+        // 2) 팀 생성자를 리더로 추가 (모든 역할)
+        TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
+        TeamMember leader = TeamMember.builder()
+                .id(id)
                 .team(newTeam)
                 .user(creator)
                 .roleInTeam(TeamRole.LEADER.name())
                 .build();
-        teamMemberRepository.save(creatorAsLeader);
+        teamMemberRepository.save(leader);
 
-        // 3) 프로젝트 자동 생성
-        //    - 생성자가 교수면 담당 교수로 지정
-        //    - 그 외(학생/조교/관리자)는 NULL로 두어 DB 트리거 충돌 방지
-        UserAccount professor = (creator.getRole() == Role.PROFESSOR) ? creator : null;
-
-        Project newProject = Project.builder()
-                .team(newTeam)
-                .professor(professor) // null 허용(트리거가 잘못된 값을 끼워넣지 않게)
-                .title((request.name() != null && !request.name().isBlank()) ? request.name() : "새 프로젝트")
-                .status(Project.Status.ACTIVE)
-                .archived(false)
-                .build();
-        projectRepository.saveAndFlush(newProject); // 제약 위반을 조기 감지
+        // 3) 자동 프로젝트 생성 제거 (중요!)
 
         // 4) 응답 매핑
         return convertToDto(newTeam);
@@ -101,7 +106,11 @@ public class TeamService {
     /** /api/teams/{teamId}/members **/
     @Transactional
     public void addMember(Long teamId, Long userId, Long requesterId) {
-        checkMemberPermission(teamId, requesterId);
+        // ✅ ADMIN은 언제든 초대 가능(가드 우회), 그 외는 팀 멤버만
+        UserAccount requester = findUserById(requesterId);
+        if (requester.getRole() != Role.ADMIN) {
+            checkMemberPermission(teamId, requesterId);
+        }
 
         Team team = findTeamById(teamId);
         UserAccount user = findUserById(userId);
@@ -133,7 +142,7 @@ public class TeamService {
     @Transactional
     public void changeLeader(Long teamId, Long newLeaderId, Long requesterId) {
         checkLeaderPermission(teamId, requesterId);
-        if (requesterId.equals(newLeaderId)) return;
+        if (Objects.equals(requesterId, newLeaderId)) return;
 
         TeamMember oldLeader = findTeamMemberById(teamId, requesterId);
         TeamMember newLeader = findTeamMemberById(teamId, newLeaderId);

@@ -329,9 +329,13 @@ export async function listProjects(opts?: { isAdmin?: boolean }): Promise<Projec
 }
 
 /** 새 프로젝트 생성 */
-export async function createProject(request: CreateProjectRequest): Promise<ProjectListDto> {
-  const { data } = await http.post("/projects", request);
-  return normalizeProject(data);
+export async function createProject(body: {
+  title: string;
+  teamId: number;
+  professorId?: number;
+}) {
+  const { data } = await http.post<ProjectListDto>("/projects", body);
+  return data;
 }
 
 /** 프로젝트 상세 */
