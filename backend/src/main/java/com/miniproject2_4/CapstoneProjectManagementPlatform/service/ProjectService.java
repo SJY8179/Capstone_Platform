@@ -68,7 +68,7 @@ public class ProjectService {
     /**
      * 내가 볼 수 있는 프로젝트 목록
      * - ADMIN    : 전체
-     * - PROFESSOR: "담당 교수"로 매핑된 프로젝트만 (professor_id 기준)
+     * - PROFESSOR: 내가 팀 멤버인 프로젝트만 (팀원으로 추가되었을 때도 표시)
      * - STUDENT  : 내가 팀 멤버인 프로젝트만
      */
     public List<ProjectListDto> listProjectsForUser(UserAccount ua) {
@@ -76,11 +76,8 @@ public class ProjectService {
 
         if (ua.getRole() == Role.ADMIN) {
             return listProjects();
-        } else if (ua.getRole() == Role.PROFESSOR) {
-            return projectRepository.findAllByProfessorUserId(ua.getId()).stream()
-                    .map(this::toListDto)
-                    .toList();
         } else {
+            // 교수와 학생 모두 팀 멤버 기준으로 조회
             return projectRepository.findAllByMemberUserId(ua.getId()).stream()
                     .map(this::toListDto)
                     .toList();
@@ -104,11 +101,8 @@ public class ProjectService {
             return projectRepository.findAllWithTeamByArchived(archived).stream()
                     .map(this::toListDto)
                     .toList();
-        } else if (ua.getRole() == Role.PROFESSOR) {
-            return projectRepository.findAllByProfessorUserIdAndArchived(ua.getId(), archived).stream()
-                    .map(this::toListDto)
-                    .toList();
         } else {
+            // 교수와 학생 모두 팀 멤버 기준으로 조회
             return projectRepository.findAllByMemberUserIdAndArchived(ua.getId(), archived).stream()
                     .map(this::toListDto)
                     .toList();

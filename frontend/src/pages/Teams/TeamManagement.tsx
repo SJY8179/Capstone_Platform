@@ -10,7 +10,7 @@ import {
   MessageSquare, CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
-import { listTeams, listTeachingTeams } from "@/api/teams";
+import { listTeams, listTeachingTeams, listAllTeams } from "@/api/teams";
 import type { TeamListDto, UserDto } from "@/types/domain";
 import { CreateTeamModal } from "@/components/Teams/CreateTeamModal";
 import { InviteMemberModal } from "@/components/Teams/InviteMemberModal";
@@ -44,12 +44,10 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     try {
       setLoading(true);
       let data: TeamListDto[] = [];
-      if (userRole === "professor") {
-        data = await listTeachingTeams();
-      } else if (userRole === "admin") {
-        data = await listTeams(); // 관리자는 모든 팀 조회
+      if (userRole === "admin") {
+        data = await listAllTeams(); // 관리자는 모든 팀 조회
       } else {
-        data = await listTeams(); // 학생은 소속 팀만 조회
+        data = await listTeams(); // 학생, 교수 모두 소속 팀만 조회 (/my 엔드포인트)
       }
       setTeams(data ?? []);
     } catch {
