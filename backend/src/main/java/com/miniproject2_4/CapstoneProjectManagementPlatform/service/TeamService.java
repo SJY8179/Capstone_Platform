@@ -67,12 +67,10 @@ public class TeamService {
     /**
      * 팀 생성
      *
-     * ⚠️ 트리거 충돌 방지를 위해 ‘팀 생성 시 자동 프로젝트 생성’을 하지 않습니다.
+     * ⚠️ 트리거 충돌 방지를 위해 '팀 생성 시 자동 프로젝트 생성'을 하지 않습니다.
      *    프로젝트는 이후 /projects API로 분리 생성하세요.
      *
-     * 또한 team_member 트리거와 충돌 방지를 위해
-     * → **학생(STUDENT)만** 자동으로 팀원(LEADER) 추가,
-     *    교수/관리자/TA 등은 **자동 추가하지 않음**.
+     * 팀 생성자는 역할에 관계없이 리더로 추가됩니다.
      */
     @Transactional
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
@@ -85,17 +83,15 @@ public class TeamService {
                 .build();
         teamRepository.save(newTeam);
 
-        // 2) 학생은 리더로 자동 추가 / 그 외는 자동 추가하지 않음
-        if (creator.getRole() == Role.STUDENT) {
-            TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
-            TeamMember leader = TeamMember.builder()
-                    .id(id)
-                    .team(newTeam)
-                    .user(creator)
-                    .roleInTeam(TeamRole.LEADER.name())
-                    .build();
-            teamMemberRepository.save(leader);
-        }
+        // 2) 팀 생성자를 리더로 추가 (모든 역할)
+        TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
+        TeamMember leader = TeamMember.builder()
+                .id(id)
+                .team(newTeam)
+                .user(creator)
+                .roleInTeam(TeamRole.LEADER.name())
+                .build();
+        teamMemberRepository.save(leader);
 
         // 3) 자동 프로젝트 생성 제거 (중요!)
 
