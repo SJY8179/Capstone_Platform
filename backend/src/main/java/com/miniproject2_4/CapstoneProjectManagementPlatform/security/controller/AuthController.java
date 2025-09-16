@@ -1,6 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.security.controller;
 
-import com.miniproject2_4.CapstoneProjectManagementPlatform.dto.PasswordResetDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.ProfessorReviewController;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.AuthSession;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
@@ -143,19 +143,19 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-id")
-    public ResponseEntity<PasswordResetDto.SuccessResponse> forgotId(
-            @Valid @RequestBody PasswordResetDto.ForgotIdRequest request) {
+    public ResponseEntity<ProfessorReviewController.PasswordResetDto.SuccessResponse> forgotId(
+            @Valid @RequestBody ProfessorReviewController.PasswordResetDto.ForgotIdRequest request) {
 
         passwordResetService.sendForgotId(request.email());
 
-        return ResponseEntity.ok(new PasswordResetDto.SuccessResponse(
+        return ResponseEntity.ok(new ProfessorReviewController.PasswordResetDto.SuccessResponse(
                 "요청이 처리되었습니다. 가입된 이메일인 경우 아이디 정보가 발송됩니다."
         ));
     }
 
     @PostMapping("/password-reset/request")
-    public ResponseEntity<PasswordResetDto.SuccessResponse> requestPasswordReset(
-            @Valid @RequestBody PasswordResetDto.PasswordResetRequest request,
+    public ResponseEntity<ProfessorReviewController.PasswordResetDto.SuccessResponse> requestPasswordReset(
+            @Valid @RequestBody ProfessorReviewController.PasswordResetDto.PasswordResetRequest request,
             HttpServletRequest httpRequest) {
 
         String clientIp = getClientIpAddress(httpRequest);
@@ -163,23 +163,23 @@ public class AuthController {
 
         passwordResetService.createAndSendResetToken(request.emailOrUsername(), clientIp, userAgent);
 
-        return ResponseEntity.ok(new PasswordResetDto.SuccessResponse(
+        return ResponseEntity.ok(new ProfessorReviewController.PasswordResetDto.SuccessResponse(
                 "요청이 처리되었습니다. 가입된 계정인 경우 비밀번호 재설정 링크가 발송됩니다."
         ));
     }
 
     @GetMapping("/password-reset/validate")
-    public ResponseEntity<PasswordResetDto.TokenValidationResponse> validateResetToken(
+    public ResponseEntity<ProfessorReviewController.PasswordResetDto.TokenValidationResponse> validateResetToken(
             @RequestParam String token) {
 
         boolean isValid = passwordResetService.validateToken(token);
 
         if (isValid) {
-            return ResponseEntity.ok(new PasswordResetDto.TokenValidationResponse(
+            return ResponseEntity.ok(new ProfessorReviewController.PasswordResetDto.TokenValidationResponse(
                     true, "유효한 토큰입니다."
             ));
         } else {
-            return ResponseEntity.badRequest().body(new PasswordResetDto.TokenValidationResponse(
+            return ResponseEntity.badRequest().body(new ProfessorReviewController.PasswordResetDto.TokenValidationResponse(
                     false, "유효하지 않거나 만료된 토큰입니다."
             ));
         }
@@ -187,7 +187,7 @@ public class AuthController {
 
     @PostMapping("/password-reset/confirm")
     public ResponseEntity<Void> confirmPasswordReset(
-            @Valid @RequestBody PasswordResetDto.PasswordResetConfirm request) {
+            @Valid @RequestBody ProfessorReviewController.PasswordResetDto.PasswordResetConfirm request) {
 
         try {
             passwordResetService.confirmPasswordReset(request.token(), request.newPassword());

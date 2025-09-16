@@ -1,7 +1,7 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.security.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.dto.PasswordResetDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.ProfessorReviewController;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.PasswordResetService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +43,7 @@ class AuthControllerTest {
     @Test
     void forgotId_ShouldReturnSuccessResponse() throws Exception {
         // Given
-        PasswordResetDto.ForgotIdRequest request = new PasswordResetDto.ForgotIdRequest("test@example.com");
+        ProfessorReviewController.PasswordResetDto.ForgotIdRequest request = new ProfessorReviewController.PasswordResetDto.ForgotIdRequest("test@example.com");
 
         // When & Then
         mockMvc.perform(post("/auth/forgot-id")
@@ -58,7 +58,7 @@ class AuthControllerTest {
     @Test
     void forgotId_WithInvalidEmail_ShouldReturnBadRequest() throws Exception {
         // Given
-        PasswordResetDto.ForgotIdRequest request = new PasswordResetDto.ForgotIdRequest("invalid-email");
+        ProfessorReviewController.PasswordResetDto.ForgotIdRequest request = new ProfessorReviewController.PasswordResetDto.ForgotIdRequest("invalid-email");
 
         // When & Then
         mockMvc.perform(post("/auth/forgot-id")
@@ -72,7 +72,7 @@ class AuthControllerTest {
     @Test
     void requestPasswordReset_ShouldReturnSuccessResponse() throws Exception {
         // Given
-        PasswordResetDto.PasswordResetRequest request = new PasswordResetDto.PasswordResetRequest("test@example.com");
+        ProfessorReviewController.PasswordResetDto.PasswordResetRequest request = new ProfessorReviewController.PasswordResetDto.PasswordResetRequest("test@example.com");
 
         // When & Then
         mockMvc.perform(post("/auth/password-reset/request")
@@ -113,7 +113,7 @@ class AuthControllerTest {
     @Test
     void confirmPasswordReset_WithValidData_ShouldReturnNoContent() throws Exception {
         // Given
-        PasswordResetDto.PasswordResetConfirm request = new PasswordResetDto.PasswordResetConfirm("validToken", "newPassword123");
+        ProfessorReviewController.PasswordResetDto.PasswordResetConfirm request = new ProfessorReviewController.PasswordResetDto.PasswordResetConfirm("validToken", "newPassword123");
 
         // When & Then
         mockMvc.perform(post("/auth/password-reset/confirm")
@@ -127,7 +127,7 @@ class AuthControllerTest {
     @Test
     void confirmPasswordReset_WithInvalidToken_ShouldReturnBadRequest() throws Exception {
         // Given
-        PasswordResetDto.PasswordResetConfirm request = new PasswordResetDto.PasswordResetConfirm("invalidToken", "newPassword123");
+        ProfessorReviewController.PasswordResetDto.PasswordResetConfirm request = new ProfessorReviewController.PasswordResetDto.PasswordResetConfirm("invalidToken", "newPassword123");
         doThrow(new IllegalArgumentException("유효하지 않은 토큰입니다."))
                 .when(passwordResetService).confirmPasswordReset("invalidToken", "newPassword123");
 
@@ -141,7 +141,7 @@ class AuthControllerTest {
     @Test
     void confirmPasswordReset_WithShortPassword_ShouldReturnBadRequest() throws Exception {
         // Given
-        PasswordResetDto.PasswordResetConfirm request = new PasswordResetDto.PasswordResetConfirm("validToken", "123");
+        ProfessorReviewController.PasswordResetDto.PasswordResetConfirm request = new ProfessorReviewController.PasswordResetDto.PasswordResetConfirm("validToken", "123");
 
         // When & Then
         mockMvc.perform(post("/auth/password-reset/confirm")

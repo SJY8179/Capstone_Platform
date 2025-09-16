@@ -90,6 +90,7 @@ public class TeamService {
                 .professor(professor) // null 허용(트리거가 잘못된 값을 끼워넣지 않게)
                 .title((request.name() != null && !request.name().isBlank()) ? request.name() : "새 프로젝트")
                 .status(Project.Status.ACTIVE)
+                .archived(false)
                 .build();
         projectRepository.saveAndFlush(newProject); // 제약 위반을 조기 감지
 
