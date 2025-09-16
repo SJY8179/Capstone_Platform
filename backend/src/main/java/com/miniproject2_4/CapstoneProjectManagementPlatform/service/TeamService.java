@@ -80,6 +80,11 @@ public class TeamService {
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
         UserAccount creator = findUserById(userId);
 
+        // 팀 이름 중복 체크
+        if (teamRepository.existsByName(request.name())) {
+            throw new IllegalStateException("이미 존재하는 팀 이름입니다: " + request.name());
+        }
+
         // 1) 팀 생성
         Team newTeam = Team.builder()
                 .name(request.name())

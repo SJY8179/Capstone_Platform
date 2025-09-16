@@ -31,4 +31,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
          where p.professor.id = :userId
     """)
     List<Team> findAllByProfessorUserId(@Param("userId") Long userId);
+
+    /** 팀 이름 중복 확인 */
+    boolean existsByName(String name);
 }
