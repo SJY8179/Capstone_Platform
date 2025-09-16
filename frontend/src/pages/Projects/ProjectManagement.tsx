@@ -412,7 +412,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             {isAdmin ? "전체 프로젝트를 관리하세요." : "참여 중인 프로젝트를 관리하세요."}
           </p>
         </div>
-        {userRole === "student" && (
+        {(userRole === "student" || userRole === "professor" || userRole === "admin") && (
           <Button
             onClick={handleCreateProjectClick}
             aria-label="새 프로젝트 만들기"
