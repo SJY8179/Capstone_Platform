@@ -27,28 +27,6 @@ function formatK(date?: string | null) {
 }
 
 export function TeamManagement({ userRole }: TeamManagementProps) {
-  // 관리자라면 이 페이지 대신 사용자 관리로 이동
-  useEffect(() => {
-    if (userRole === "admin") {
-      window.location.assign("/admin/users");
-    }
-  }, [userRole]);
-
-  if (userRole === "admin") {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">팀 관리</h1>
-            <p className="text-muted-foreground">관리자는 사용자 관리 페이지로 이동합니다.</p>
-          </div>
-          <Button onClick={() => (window.location.href = "/admin/users")}>
-            사용자 관리로 이동
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   const [q, setQ] = useState("");
   const [teams, setTeams] = useState<TeamListDto[]>([]);
@@ -68,8 +46,10 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
       let data: TeamListDto[] = [];
       if (userRole === "professor") {
         data = await listTeachingTeams();
+      } else if (userRole === "admin") {
+        data = await listTeams(); // 관리자는 모든 팀 조회
       } else {
-        data = await listTeams();
+        data = await listTeams(); // 학생은 소속 팀만 조회
       }
       setTeams(data ?? []);
     } catch {
@@ -156,7 +136,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
           <h1 className="text-2xl font-semibold">팀 관리</h1>
           <p className="text-muted-foreground">팀을 구성하고 협업을 진행하세요.</p>
         </div>
-        {userRole === "student" && (
+        {(userRole === "student" || userRole === "professor" || userRole === "admin") && (
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" /> 새 팀 생성
           </Button>
@@ -190,7 +170,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
 
                 {/* 카드별 액션 */}
                 <div className="flex gap-2">
-                  {userRole === "student" && (
+                  {(userRole === "student" || userRole === "professor" || userRole === "admin") && (
                     <>
                       <Button size="sm" variant="outline" onClick={() => openInvite(t)}>
                         <UserPlus className="h-4 w-4 mr-1" /> 팀원 초대
