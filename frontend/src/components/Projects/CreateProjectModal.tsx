@@ -61,7 +61,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: "",
         description: "",
         teamId: "",
-        professorId: "",
+        professorId: undefined,
       });
     }
   }, [open, reset]);
@@ -103,7 +103,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: data.title.trim(),
         description: data.description?.trim() || undefined,
         teamId: parseInt(data.teamId, 10),
-        professorId: data.professorId ? parseInt(data.professorId, 10) : undefined,
+        professorId: data.professorId && data.professorId !== "none" ? parseInt(data.professorId, 10) : undefined,
       };
 
       console.log("API 요청 데이터:", request);
@@ -118,7 +118,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: "",
         description: "",
         teamId: "",
-        professorId: "",
+        professorId: undefined,
       });
     } catch (error: any) {
       console.error("프로젝트 생성 실패:", error);
@@ -142,7 +142,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: "",
         description: "",
         teamId: "",
-        professorId: "",
+        professorId: undefined,
       });
     }
   };
@@ -242,7 +242,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">선택 안함</SelectItem>
+                    <SelectItem value="none">선택 안함</SelectItem>
                     {professors.map((professor) => (
                       <SelectItem key={professor.id} value={professor.id.toString()}>
                         {professor.name} ({professor.email})
