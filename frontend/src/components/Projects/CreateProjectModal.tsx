@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { createProject } from "@/api/projects";
-import { listTeams } from "@/api/teams";
+import { listTeams, getAllProfessors } from "@/api/teams";
 import type { CreateProjectRequest, ProjectListDto, TeamListDto } from "@/types/domain";
 
 interface CreateProjectModalProps {
@@ -33,12 +33,15 @@ interface FormData {
   title: string;
   description?: string;
   teamId: string; // 팀 ID (필수)
+  professorId?: string; // 담당 교수 ID (선택)
 }
 
 export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProjectModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [teams, setTeams] = useState<TeamListDto[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
+  const [professors, setProfessors] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [loadingProfessors, setLoadingProfessors] = useState(false);
 
   const {
     register,
@@ -52,11 +55,13 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
   useEffect(() => {
     if (open) {
       loadTeams();
+      loadProfessors();
       // 모달이 열릴 때 폼 완전 리셋
       reset({
         title: "",
         description: "",
         teamId: "",
+        professorId: "",
       });
     }
   }, [open, reset]);
@@ -74,6 +79,19 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
     }
   };
 
+  const loadProfessors = async () => {
+    try {
+      setLoadingProfessors(true);
+      const professorList = await getAllProfessors();
+      setProfessors(professorList);
+    } catch (error) {
+      console.error("교수 목록 로드 실패:", error);
+      toast.error("교수 목록을 불러오는데 실패했습니다.");
+    } finally {
+      setLoadingProfessors(false);
+    }
+  };
+
   const onSubmit = async (data: FormData) => {
     try {
       setIsSubmitting(true);
@@ -85,7 +103,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: data.title.trim(),
         description: data.description?.trim() || undefined,
         teamId: parseInt(data.teamId, 10),
-        // professorId는 선택 항목(없으면 백엔드가 팀 담당 교수/NULL 로 처리)
+        professorId: data.professorId ? parseInt(data.professorId, 10) : undefined,
       };
 
       console.log("API 요청 데이터:", request);
@@ -100,6 +118,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: "",
         description: "",
         teamId: "",
+        professorId: "",
       });
     } catch (error: any) {
       console.error("프로젝트 생성 실패:", error);
@@ -123,6 +142,7 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
         title: "",
         description: "",
         teamId: "",
+        professorId: "",
       });
     }
   };
@@ -202,6 +222,38 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
             />
             {errors.teamId && (
               <p className="text-sm text-destructive">{errors.teamId.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="professorId">담당 교수 (선택)</Label>
+            <Controller
+              name="professorId"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={isSubmitting || loadingProfessors}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={loadingProfessors ? "교수 목록 로딩 중..." : "담당 교수를 선택하세요 (선택사항)"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">선택 안함</SelectItem>
+                    {professors.map((professor) => (
+                      <SelectItem key={professor.id} value={professor.id.toString()}>
+                        {professor.name} ({professor.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.professorId && (
+              <p className="text-sm text-destructive">{errors.professorId.message}</p>
             )}
           </div>
 
