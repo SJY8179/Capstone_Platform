@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.CreateProjectRequest;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectDetailDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
@@ -21,9 +22,11 @@ import java.util.*;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
+    private final UserRepository userRepository;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -35,21 +38,64 @@ public class ProjectService {
     }
 
     /**
-     * 내가 볼 수 있는 프로젝트 목록
-     * - ADMIN    : 전체
-     * - PROFESSOR: "담당 교수"로 매핑된 프로젝트만 (professor_id 기준)
-     * - STUDENT  : 내가 팀 멤버인 프로젝트만
+     * 새 프로젝트 생성: 기존 팀 선택
+     * - ADMIN 은 팀 멤버가 아니어도 생성 허용(운영 편의)
+     * - 그 외(교수/학생)는 해당 팀의 '멤버'여야 함
+     * - DB 정책상 professor가 필수인 경우를 위해:
+     *   ① req.getProfessorId() 가 오면 교수 여부 검증 후 지정
+     *   ② 없으면 팀 멤버 중 첫 교수(Role.PROFESSOR) 자동 지정
+     *   ③ 그래도 없으면 400(PROFESSOR_REQUIRED)
+     * - 초기 status는 **ACTIVE**
      */
+    @Transactional
+    public ProjectListDto createProject(CreateProjectRequest request, UserAccount creator) {
+        if (creator == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
+        // 1) 팀 존재 확인
+        Team team = teamRepository.findById(request.getTeamId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "선택한 팀이 존재하지 않습니다."));
+
+        // 2) 권한: ADMIN 은 우회 허용, 그 외는 팀 멤버만
+        boolean isAllowed = (creator.getRole() == Role.ADMIN)
+                || teamMemberRepository.existsByTeam_IdAndUser_Id(team.getId(), creator.getId());
+        if (!isAllowed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "선택한 팀의 멤버가 아닙니다.");
+        }
+
+        // 프로젝트 타이틀 중복 체크
+        if (projectRepository.existsByTitleAndArchivedFalse(request.getTitle())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미 존재하는 프로젝트 이름입니다: " + request.getTitle());
+        }
+
+        // 3) 담당 교수 결정
+        UserAccount professor = resolveProfessorForTeam(team, request.getProfessorId());
+        if (professor == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSOR_REQUIRED");
+        }
+
+        // 4) 프로젝트 생성
+        Project project = Project.builder()
+                .title(normalizeTitle(request.getTitle()))
+                .team(team)
+                .professor(professor)           // DB 트리거 합의
+                .status(Project.Status.ACTIVE)  // 초기값 ACTIVE
+                .archived(false)
+                .build();
+
+        project = projectRepository.save(project);
+        return toListDto(project);
+    }
+
+    /** 내가 볼 수 있는 프로젝트 목록 */
     public List<ProjectListDto> listProjectsForUser(UserAccount ua) {
         if (ua == null) return List.of();
 
         if (ua.getRole() == Role.ADMIN) {
             return listProjects();
-        } else if (ua.getRole() == Role.PROFESSOR) {
-            return projectRepository.findAllByProfessorUserId(ua.getId()).stream()
-                    .map(this::toListDto)
-                    .toList();
         } else {
+            // 교수와 학생 모두 팀 멤버 기준으로 조회
             return projectRepository.findAllByMemberUserId(ua.getId()).stream()
                     .map(this::toListDto)
                     .toList();
@@ -63,12 +109,29 @@ public class ProjectService {
                 .toList();
     }
 
+    /** Archive 필터 목록 */
+    public List<ProjectListDto> listProjectsForUser(UserAccount ua, String status) {
+        if (ua == null) return List.of();
+
+        Boolean archived = "archived".equals(status);
+
+        if (ua.getRole() == Role.ADMIN) {
+            return projectRepository.findAllWithTeamByArchived(archived).stream()
+                    .map(this::toListDto)
+                    .toList();
+        } else {
+            // 교수와 학생 모두 팀 멤버 기준으로 조회
+            return projectRepository.findAllByMemberUserIdAndArchived(ua.getId(), archived).stream()
+                    .map(this::toListDto)
+                    .toList();
+        }
+    }
+
     /** 프로젝트 상세 (권한 확인 포함) */
     public ProjectDetailDto getProjectDetail(Long projectId, UserAccount viewer) {
         Project p = projectRepository.findByIdWithTeamAndProfessor(projectId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
 
-        // 권한: Admin 모두 허용, Professor=담당 또는 팀 멤버, Student=팀 멤버
         boolean allowed;
         if (viewer.getRole() == Role.ADMIN) {
             allowed = true;
@@ -189,7 +252,6 @@ public class ProjectService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
 
         if (githubUrl == null || githubUrl.trim().isEmpty()) {
-            // 링크 제거
             p.setRepoOwner(null);
             p.setGithubRepo(null);
         } else {
@@ -197,7 +259,6 @@ public class ProjectService {
             String owner = parsed[0];
             String repo  = parsed[1];
 
-            // 길이 제한: 엔티티 컬럼 길이에 맞춤
             if (owner.length() > 50 || repo.length() > 100) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_GITHUB_URL");
             }
@@ -206,11 +267,13 @@ public class ProjectService {
             p.setGithubRepo(repo);
         }
 
-        // 커밋 시점 flush, 최신 상세 반환
+        projectRepository.flush();
         return getProjectDetail(projectId, actor);
     }
 
-    /** owner/repo 또는 https(s)://github.com/owner/repo(.git) → [owner, repo] */
+    /* ===== 내부 유틸 ===== */
+
+    /** GitHub URL/owner/repo 문자열을 owner/repo 튜플로 파싱 */
     private String[] parseGithubOwnerRepo(String raw) {
         String s = raw == null ? "" : raw.trim();
 
@@ -245,7 +308,24 @@ public class ProjectService {
         return new String[]{owner, repo};
     }
 
-    /* ===== 내부 매핑: 목록 카드 ===== */
+    /** 팀에서 교수 결정: 명시 id 우선, 없으면 팀 멤버 중 교수 1명 자동 선택 */
+    private UserAccount resolveProfessorForTeam(Team team, Long explicitProfessorId) {
+        if (explicitProfessorId != null) {
+            UserAccount prof = userRepository.findById(explicitProfessorId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "교수 계정을 찾을 수 없습니다."));
+            if (prof.getRole() != Role.PROFESSOR) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSOR_ID_INVALID");
+            }
+            return prof;
+        }
+        var members = teamMemberRepository.findWithUserByTeamId(team.getId());
+        return members.stream()
+                .map(TeamMember::getUser)
+                .filter(Objects::nonNull)
+                .filter(u -> u.getRole() == Role.PROFESSOR)
+                .findFirst().orElse(null);
+    }
+
     public ProjectListDto toListDto(Project p) {
         String teamName = (p.getTeam() != null && p.getTeam().getName() != null)
                 ? p.getTeam().getName()
@@ -326,5 +406,74 @@ public class ProjectService {
         if (a == null) return b;
         if (b == null) return a;
         return a.isAfter(b) ? a : b;
+    }
+
+    @Transactional
+    public void archiveProject(Long projectId, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+        checkArchivePermission(project, actor);
+        if (Boolean.TRUE.equals(project.getArchived())) return;
+        project.setArchived(true);
+        projectRepository.save(project);
+    }
+
+    @Transactional
+    public void restoreProject(Long projectId, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+        checkArchivePermission(project, actor);
+        if (!Boolean.TRUE.equals(project.getArchived())) return;
+        project.setArchived(false);
+        projectRepository.save(project);
+    }
+
+    @Transactional
+    public void purgeProject(Long projectId, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+        checkPurgePermission(project, actor);
+        if (!Boolean.TRUE.equals(project.getArchived())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아카이브된 프로젝트만 영구 삭제할 수 있습니다.");
+        }
+        projectRepository.delete(project);
+    }
+
+    private void checkArchivePermission(Project project, UserAccount actor) {
+        if (actor.getRole() == Role.ADMIN) return;
+        if (actor.getRole() == Role.PROFESSOR) {
+            if (project.getProfessor() != null && project.getProfessor().getId().equals(actor.getId())) return;
+        }
+        if (project.getTeam() != null) {
+            boolean isMember = teamMemberRepository.existsByTeam_IdAndUser_Id(project.getTeam().getId(), actor.getId());
+            if (isMember) return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "프로젝트를 아카이브할 권한이 없습니다.");
+    }
+
+    private void checkPurgePermission(Project project, UserAccount actor) {
+        if (actor.getRole() == Role.ADMIN) return;
+        if (actor.getRole() == Role.PROFESSOR) {
+            if (project.getProfessor() != null && project.getProfessor().getId().equals(actor.getId())) return;
+        }
+        if (project.getTeam() != null) {
+            boolean isMember = teamMemberRepository.existsByTeam_IdAndUser_Id(project.getTeam().getId(), actor.getId());
+            if (isMember) return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "프로젝트를 영구 삭제할 권한이 없습니다.");
+    }
+
+    private String normalizeTitle(String t) {
+        if (t == null || t.isBlank()) return "새 프로젝트";
+        return t.trim();
     }
 }

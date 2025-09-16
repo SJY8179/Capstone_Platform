@@ -20,8 +20,11 @@ public class TeamInvitation extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserAccount invitee;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "inviter_id", nullable = false)
+    private UserAccount inviter;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private RequestStatus status; // PENDING, ACCEPTED, REJECTED
-
+    private RequestStatus status;
 }

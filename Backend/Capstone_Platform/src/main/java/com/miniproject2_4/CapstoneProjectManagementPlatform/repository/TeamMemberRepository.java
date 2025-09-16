@@ -14,10 +14,8 @@ import java.util.Optional;
 
 public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemberId> {
 
-    /** 팀 인원 수 */
     long countByTeam_Id(Long teamId);
 
-    /** 권한검사용: 팀에 해당 사용자가 포함되는지 */
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
 
     /**
@@ -47,6 +45,35 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemb
             @Param("teamIds") List<Long> teamIds,
             @Param("role") Role role
     );
+
+    /** 교수/강사 권한을 가진 팀 멤버들 조회 */
+    @Query("""
+        select tm
+          from TeamMember tm
+          join fetch tm.user u
+         where tm.user.role in (:roles)
+         order by tm.team.id, u.name
+    """)
+    List<TeamMember> findMembersByUserRole(@Param("roles") List<Role> roles);
+
+    /** 특정 권한을 가진 팀 멤버들 삭제 */
+    @Modifying
+    @Query("DELETE FROM TeamMember tm WHERE tm.user.role in (:roles)")
+    void deleteMembersByUserRole(@Param("roles") List<Role> roles);
+
+    /** 학생의 최근 프로젝트 제목 목록 (최신순) */
+    @Query("""
+        select p.title
+          from Project p
+         where p.archived = false
+           and p.team.id in (
+                select tm.team.id
+                  from TeamMember tm
+                 where tm.user.id = :userId
+           )
+         order by p.createdAt desc
+    """)
+    List<String> findRecentProjectTitles(@Param("userId") Long userId);
 
     /**
      * 팀 ID와 역할로 팀원 및 팀원의 사용자 정보 조회

@@ -1,8 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.AnnouncementRequest;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.TeamListDto;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.InvitableUserDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -12,9 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +25,7 @@ public class TeamService {
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
     private final TeamInvitationRepository teamInvitationRepository;
+    private final NotificationService notificationService;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -73,22 +70,24 @@ public class TeamService {
                     return new InvitableUserDto(user.getId(), user.getName(), user.getEmail(), status);
                 })
                 .toList();
-
-//        if (memberIds.isEmpty()) {
-//            return userRepository.findByRole(Role.STUDENT).stream()
-//                    .map(user -> new UserDto(user.getId(), user.getName(), user.getEmail()))
-//                    .toList();
-//        }
-
-//        return userRepository.findByRoleAndIdNotIn(Role.STUDENT, memberIds).stream()
-//                .map(user -> new UserDto(user.getId(), user.getName(), user.getEmail()))
-//                .toList();
     }
 
-    /** 팀 생성: 새 팀 + (필요 시) 새 프로젝트 자동 생성: /api/teams */
+    /**
+     * 팀 생성
+     *
+     * ⚠️ 트리거 충돌 방지를 위해 '팀 생성 시 자동 프로젝트 생성'을 하지 않습니다.
+     *    프로젝트는 이후 /projects API로 분리 생성하세요.
+     *
+     * 팀 생성자는 역할에 관계없이 리더로 추가됩니다.
+     */
     @Transactional
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
         UserAccount creator = findUserById(userId);
+
+        // 팀 이름 중복 체크
+        if (teamRepository.existsByName(request.name())) {
+            throw new IllegalStateException("이미 존재하는 팀 이름입니다: " + request.name());
+        }
 
         // 1) 팀 생성
         Team newTeam = Team.builder()
@@ -97,39 +96,34 @@ public class TeamService {
                 .build();
         teamRepository.save(newTeam);
 
-        // 2) 생성자를 팀장으로 추가
-        TeamMemberId teamMemberId = new TeamMemberId(newTeam.getId(), creator.getId());
-        TeamMember creatorAsLeader = TeamMember.builder()
-                .id(teamMemberId)
+        // 2) 팀 생성자를 리더로 추가 (모든 역할)
+        TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
+        TeamMember leader = TeamMember.builder()
+                .id(id)
                 .team(newTeam)
                 .user(creator)
-                .roleInTeam("LEADER")
+                .roleInTeam(TeamRole.LEADER.name())
                 .build();
-        teamMemberRepository.save(creatorAsLeader);
+        teamMemberRepository.save(leader);
 
-        // 3) 프로젝트 자동 생성
-        //    - 생성자가 교수면 담당 교수로 지정
-        //    - 그 외(학생/조교/관리자)는 NULL로 두어 DB 트리거 충돌 방지
-        UserAccount professor = (creator.getRole() == Role.PROFESSOR) ? creator : null;
+        // 3) 자동 프로젝트 생성 제거 (중요!)
 
-        Project newProject = Project.builder()
-                .team(newTeam)
-                .professor(professor) // null 허용
-                .title((request.name() != null && !request.name().isBlank()) ? request.name() : "새 프로젝트")
-                .status(Project.Status.ACTIVE)
-                .build();
-        projectRepository.save(newProject);
-
+        // 4) 응답 매핑
         return convertToDto(newTeam);
     }
+
 
     /** 팀원 초대 요청: /api/teams/{teamId}/invitations */
     @Transactional
     public void inviteMember(Long teamId, Long inviteeId, Long requesterId) {
-        checkMemberPermission(teamId, requesterId);
+        UserAccount requester = findUserById(requesterId);
+        if (requester.getRole() != Role.ADMIN) {
+            checkMemberPermission(teamId, requesterId);
+        }
 
         Team team = findTeamById(teamId);
         UserAccount invitee = findUserById(inviteeId);
+        UserAccount inviter = findUserById(requesterId);
 
         if (invitee.getRole() != Role.STUDENT) {
             throw new IllegalArgumentException("학생 역할의 사용자만 팀원으로 초대할 수 있습니다.");
@@ -144,17 +138,25 @@ public class TeamService {
         TeamInvitation invitation = TeamInvitation.builder()
                 .team(team)
                 .invitee(invitee)
+                .inviter(inviter)
                 .status(RequestStatus.PENDING)
                 .build();
         teamInvitationRepository.save(invitation);
 
-        // [알림 로직] 초대받은 학생에게 알림 보내기
-        // notificationService.sendNotification(invitee, team.getName() + " 팀에서 당신을 초대했습니다.");
+        String message = String.format("'%s'님이 '%s' 팀으로 초대했습니다.", inviter.getName(), team.getName());
+        notificationService.createNotification(
+                invitee,
+                inviter,
+                NotificationType.TEAM_INVITATION,
+                "팀원 초대 요청",
+                message,
+                invitation.getId()
+        );
     }
 
     /** 팀원 초대 요청 수락/거절: /api/teams/invitations/{invitationId} */
     @Transactional
-    public TeamInvitation respondToInvitation(Long invitationId, boolean isAccepted, Long inviteeId) {
+    public TeamInvitationDto respondToInvitation(Long invitationId, boolean isAccepted, Long inviteeId) {
         TeamInvitation invitation = teamInvitationRepository.findById(invitationId)
                 .orElseThrow(() -> new EntityNotFoundException("초대 요청을 찾을 수 없습니다."));
 
@@ -165,27 +167,43 @@ public class TeamService {
             throw new IllegalStateException("이미 처리된 요청입니다.");
         }
 
+        UserAccount invitee = invitation.getInvitee();
+        UserAccount inviter = invitation.getInviter();
         Team team = invitation.getTeam();
-        UserAccount teamLeader = teamMemberRepository.findByTeamIdAndRoleInTeam(team.getId(), "LEADER")
-                .map(TeamMember::getUser)
-                .orElseThrow(() -> new EntityNotFoundException("팀장을 찾을 수 없습니다."));
+        String message;
 
         if (isAccepted) {
             invitation.setStatus(RequestStatus.ACCEPTED);
             saveTeamMember(team.getId(), inviteeId);
-
-            // [알림 로직] 팀장에게 수락 알림 보내기
-            // notificationService.sendNotification(teamLeader, invitation.getInvitee().getName() + " 님이 팀 초대를 수락했습니다.");
+            message = String.format("'%s'님이 '%s' 팀 초대를 수락했습니다.", invitee.getName(), team.getName());
+            notificationService.createNotification(
+                    inviter,
+                    invitee,
+                    NotificationType.INVITATION_ACCEPTED,
+                    "팀원 초대 수락",
+                    message,
+                    invitation.getTeam().getId()
+            );
         } else {
             invitation.setStatus(RequestStatus.REJECTED);
-            // [알림 로직] 팀장에게 거절 알림 보내기
-            // notificationService.sendNotification(teamLeader, invitation.getInvitee().getName() + " 님이 팀 초대를 거절했습니다.");
+            message = String.format("'%s'님이 '%s' 팀 초대를 거절했습니다.", invitee.getName(), team.getName());
+            notificationService.createNotification(
+                    inviter,
+                    invitee,
+                    NotificationType.INVITATION_REJECTED,
+                    "팀원 초대 거절",
+                    message,
+                    invitation.getTeam().getId()
+            );
         }
+        notificationService.markInvitationNotificationAsRead(invitationId);
+        TeamInvitation savedInvitation = teamInvitationRepository.save(invitation);
 
-        return invitation;
+        return TeamInvitationDto.from(savedInvitation);
     }
 
     /** (교수) 공지 보내기: /api/teams/{teamId}/announcements */
+    @Transactional
     public void sendAnnouncementToTeam(Long teamId, AnnouncementRequest request, Long professorId) {
         List<UserAccount> studentMembers = teamMemberRepository.findUsersByTeamIdAndRole(teamId, Role.STUDENT);
 
@@ -193,15 +211,27 @@ public class TeamService {
             throw new IllegalStateException("공지를 보낼 학생이 없습니다.");
         }
 
-        // 3. 각 학생에게 알림 발송
-        // (NotificationService는 DB에 알림을 저장하거나 WebSocket으로 실시간 전송하는 역할을 함)
-//        for (UserAccount student : studentMembers) {
-//            notificationService.sendNotification(
-//                    student, // 알림을 받을 사람
-//                    request.title(), // 공지 제목
-//                    request.content()  // 공지 내용
-//            );
-//        }
+        Team team = findTeamById(teamId);
+        UserAccount professor = findUserById(professorId);
+        Announcement announcement = Announcement.builder()
+                .team(team)
+                .author(professor)
+                .title(request.title())
+                .content(request.content())
+                .build();
+
+        String message = String.format("팀 공지: %s", request.title());
+
+        for (UserAccount member : studentMembers) {
+            notificationService.createNotification(
+                    member,
+                    professor,
+                    NotificationType.TEAM_ANNOUNCEMENT,
+                    message,
+                    request.content(),
+                    team.getId()
+            );
+        }
     }
 
     /** 팀 정보 수정: /api/teams/{teamId} */
@@ -217,7 +247,7 @@ public class TeamService {
     /** 팀 리더 변경: /api/teams/{teamId}/leader */
     @Transactional
     public void changeLeader(Long teamId, Long newLeaderId, Long requesterId) {
-        if (requesterId.equals(newLeaderId)) return;
+        if (Objects.equals(requesterId, newLeaderId)) return;
 
         TeamMember oldLeader = teamMemberRepository.findByTeamIdAndRoleInTeam(teamId, "LEADER")
                 .orElseThrow(() -> new IllegalStateException("현재 팀의 팀장 정보를 찾을 수 없습니다."));
@@ -257,6 +287,99 @@ public class TeamService {
         teamRepository.deleteById(teamId);
     }
 
+    /** 모든 교수 목록 조회 */
+    public List<UserDto> getAllProfessors() {
+        List<UserAccount> professors = userRepository.findByRole(Role.PROFESSOR);
+        return professors.stream()
+                .map(prof -> new UserDto(prof.getId(), prof.getName(), prof.getEmail()))
+                .toList();
+    }
+
+    /** 팀에 교수 추가 */
+    @Transactional
+    public void addProfessorToTeam(Long teamId, Long professorId, Long requesterId) {
+        // 팀 존재 확인
+        Team team = findTeamById(teamId);
+
+        // 요청자가 팀 멤버인지 확인
+        boolean isRequesterMember = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, requesterId);
+        if (!isRequesterMember) {
+            throw new AccessDeniedException("팀 멤버만 교수를 추가할 수 있습니다.");
+        }
+
+        // 교수 존재 및 권한 확인
+        UserAccount professor = findUserById(professorId);
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new IllegalArgumentException("해당 사용자는 교수가 아닙니다.");
+        }
+
+        // 이미 팀에 있는지 확인
+        boolean isAlreadyMember = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, professorId);
+        if (isAlreadyMember) {
+            throw new IllegalStateException("이미 팀에 소속된 교수입니다.");
+        }
+
+        // 교수를 팀 멤버로 추가 (일반 멤버로)
+        TeamMember newMember = TeamMember.builder()
+                .id(new TeamMemberId(teamId, professorId))
+                .team(team)
+                .user(professor)
+                .roleInTeam("MEMBER")
+                .build();
+
+        teamMemberRepository.save(newMember);
+    }
+
+    /** 모든 팀에서 교수/강사 권한을 가진 멤버들 제거 */
+    @Transactional
+    public int removeProfessorsAndTAsFromAllTeams() {
+        // 제거할 권한 목록
+        List<Role> rolesToRemove = Arrays.asList(Role.PROFESSOR, Role.TA);
+
+        // 제거하기 전에 해당 멤버들을 조회해서 로그 출력
+        List<TeamMember> membersToRemove = teamMemberRepository.findMembersByUserRole(rolesToRemove);
+
+        if (membersToRemove.isEmpty()) {
+            return 0;
+        }
+
+        // 제거할 멤버들 정보 출력 (디버깅용)
+        System.out.println("=== 팀에서 제거될 교수/강사 멤버들 ===");
+        for (TeamMember member : membersToRemove) {
+            System.out.printf("팀 ID: %d, 사용자: %s (%s), 권한: %s%n",
+                    member.getTeam().getId(),
+                    member.getUser().getName() != null ? member.getUser().getName() : member.getUser().getEmail(),
+                    member.getUser().getEmail(),
+                    member.getUser().getRole()
+            );
+        }
+
+        // 실제 삭제 실행
+        teamMemberRepository.deleteMembersByUserRole(rolesToRemove);
+
+        return membersToRemove.size();
+    }
+
+    /** 팀원을 데이터베이스에 저장하는 메서드 */
+    private void saveTeamMember(Long teamId, Long userId) {
+        if (teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, userId)) {
+            throw new IllegalStateException("해당 사용자는 이미 팀에 속해있습니다.");
+        }
+
+        Team team = findTeamById(teamId);
+        UserAccount user = findUserById(userId);
+        TeamMemberId teamMemberId = new TeamMemberId(teamId, userId);
+
+        TeamMember newTeamMember = TeamMember.builder()
+                .id(teamMemberId)
+                .team(team)
+                .user(user)
+                .roleInTeam("MEMBER")
+                .build();
+
+        teamMemberRepository.save(newTeamMember);
+    }
+
     /** TeamMember.roleInTeam 이 String/Enum 어느 쪽이든 안전 변환 */
     private static TeamRole toRole(Object raw) {
         if (raw == null) return TeamRole.MEMBER;
@@ -279,28 +402,8 @@ public class TeamService {
     private void checkLeaderPermission(Long teamId, Long userId) {
         TeamMember requester = findTeamMemberById(teamId, userId);
         if (toRole(requester.getRoleInTeam()) != TeamRole.LEADER) {
-            throw new AccessDeniedException("팀의 리더만 이 작업을 수행할 수 있습니다.");
+            throw new AccessDeniedException("팀 리더만 이 작업을 수행할 수 있습니다.");
         }
-    }
-
-    /** 팀원을 데이터베이스에 저장하는 메서드 */
-    private void saveTeamMember(Long teamId, Long userId) {
-        if (teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, userId)) {
-            throw new IllegalStateException("해당 사용자는 이미 팀에 속해있습니다.");
-        }
-
-        Team team = findTeamById(teamId);
-        UserAccount user = findUserById(userId);
-        TeamMemberId teamMemberId = new TeamMemberId(teamId, userId);
-
-        TeamMember newTeamMember = TeamMember.builder()
-                .id(teamMemberId)
-                .team(team)
-                .user(user)
-                .roleInTeam("MEMBER")
-                .build();
-
-        teamMemberRepository.save(newTeamMember);
     }
 
     /** Team → TeamListDto.Response 변환 (NonUniqueResult 안전 버전) */
@@ -360,5 +463,4 @@ public class TeamService {
         return teamMemberRepository.findById(new TeamMemberId(teamId, userId))
                 .orElseThrow(() -> new EntityNotFoundException("해당 팀원을 찾을 수 없습니다: " + userId));
     }
-
 }

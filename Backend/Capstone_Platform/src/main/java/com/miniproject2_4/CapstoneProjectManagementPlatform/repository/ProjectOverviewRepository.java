@@ -23,4 +23,7 @@ public interface ProjectOverviewRepository extends JpaRepository<ProjectOverview
            where o.project.id = :projectId
            """)
     Optional<ProjectOverview> findByProjectIdWithUsers(@Param("projectId") Long projectId);
+
+    /** 추가: 관리자 활성 과목 집계 (게시된 개요 + 활성 프로젝트) */
+    long countByStatusAndProject_ArchivedFalse(ProjectOverview.Status status);
 }

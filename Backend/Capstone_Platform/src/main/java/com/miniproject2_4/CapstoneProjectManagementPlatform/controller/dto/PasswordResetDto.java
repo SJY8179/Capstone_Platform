@@ -1,4 +1,4 @@
-package com.miniproject2_4.CapstoneProjectManagementPlatform.dto;
+package com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

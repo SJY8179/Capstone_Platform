@@ -13,6 +13,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("""
         select p from Project p
         join fetch p.team t
+        where p.archived = false
     """)
     List<Project> findAllWithTeam();
 
@@ -40,7 +41,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
         select distinct p
           from Project p
           left join fetch p.team t
-         where exists (
+         where p.archived = false
+           and exists (
                select 1
                  from com.miniproject2_4.CapstoneProjectManagementPlatform.entity.TeamMember tm
                 where tm.team = p.team
@@ -59,10 +61,50 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
           from Project p
           left join fetch p.team t
           left join p.professor prof
-         where prof.id = :userId
+         where p.archived = false
+           and prof.id = :userId
     """)
     List<Project> findAllByProfessorUserId(@Param("userId") Long userId);
 
     /** (선택) 파생 쿼리도 필요하면 사용 가능 – fetch join은 안 걸림 */
     List<Project> findAllByProfessor_Id(Long userId);
+
+    /** Archive/restore operations - finds by status (active/archived) */
+    @Query("""
+        select p from Project p
+        join fetch p.team t
+        where p.archived = :archived
+    """)
+    List<Project> findAllWithTeamByArchived(@Param("archived") Boolean archived);
+
+    /** Archive specific queries for user roles */
+    @Query("""
+        select distinct p
+          from Project p
+          left join fetch p.team t
+         where p.archived = :archived
+           and exists (
+               select 1
+                 from com.miniproject2_4.CapstoneProjectManagementPlatform.entity.TeamMember tm
+                where tm.team = p.team
+                  and tm.user.id = :userId
+         )
+    """)
+    List<Project> findAllByMemberUserIdAndArchived(@Param("userId") Long userId, @Param("archived") Boolean archived);
+
+    @Query("""
+        select distinct p
+          from Project p
+          left join fetch p.team t
+          left join p.professor prof
+         where p.archived = :archived
+           and prof.id = :userId
+    """)
+    List<Project> findAllByProfessorUserIdAndArchived(@Param("userId") Long userId, @Param("archived") Boolean archived);
+
+    /** 추가: 활성(archived=false) 프로젝트 수 */
+    long countByProfessor_Id(Long userId);
+
+    /** 프로젝트 타이틀 중복 확인 (활성 프로젝트만) */
+    boolean existsByTitleAndArchivedFalse(String title);
 }

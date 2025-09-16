@@ -3,6 +3,7 @@ package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.NotificationDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.TeamInvitationDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.NotificationType;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.TeamInvitation;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.NotificationService;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.service.TeamService;

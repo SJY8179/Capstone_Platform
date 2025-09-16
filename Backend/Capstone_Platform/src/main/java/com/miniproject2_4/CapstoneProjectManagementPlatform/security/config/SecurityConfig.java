@@ -50,6 +50,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/files", "/files/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/uploads").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/uploads/put/**").authenticated()
+
+                        /** 관리자 API 보호 */
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        /** 관리자 전용 전체 팀 목록 보호 (학생/교수는 /teams/my 사용) */
+                        .requestMatchers(HttpMethod.GET, "/teams").hasRole("ADMIN")
+
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -71,7 +77,7 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
-        config.setExposedHeaders(List.of("Content-Disposition","Accept-Ranges","Content-Range"));
+        config.setExposedHeaders(List.of("Content-Disposition","Accept-Ranges","Content-Range","X-Request-Id"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

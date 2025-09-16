@@ -16,7 +16,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
 
     /** 내가 '팀 멤버'로 속한 팀 */
     @Query(value = """
-        SELECT t.*
+        SELECT t.* 
           FROM team t
           JOIN team_member tm ON tm.team_id = t.id
          WHERE tm.user_id = :userId
@@ -31,4 +31,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
          where p.professor.id = :userId
     """)
     List<Team> findAllByProfessorUserId(@Param("userId") Long userId);
+
+    /** 팀 이름 중복 확인 */
+    boolean existsByName(String name);
 }

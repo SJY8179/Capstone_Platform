@@ -1,9 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.controller;
 
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.AnnouncementRequest;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.MemberReq;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.TeamListDto;
-import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.InvitableUserDto;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.TeamInvitation;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
@@ -24,9 +21,12 @@ import java.util.List;
 public class TeamController {
     private final TeamService teamService;
 
-    /** (관리자/전체 조회) */
+    /** (관리자 전용) 전체 팀 목록 */
     @GetMapping
-    public ResponseEntity<List<TeamListDto.Response>> listItems() {
+    public ResponseEntity<List<TeamListDto.Response>> listItems(@AuthenticationPrincipal UserAccount user) {
+        if (user == null || user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_ALLOWED_TO_VIEW");
+        }
         return ResponseEntity.ok(teamService.listTeams());
     }
 
@@ -40,7 +40,7 @@ public class TeamController {
     @GetMapping("/teaching")
     public ResponseEntity<List<TeamListDto.Response>> teaching(@AuthenticationPrincipal UserAccount user) {
         if (user.getRole() == Role.ADMIN) {
-            // 관리자는 전체 허용 (요청/정책에 따라 조정 가능)
+            // 관리자는 전체 허용
             return ResponseEntity.ok(teamService.listTeams());
         }
         if (user.getRole() != Role.PROFESSOR) {
@@ -53,6 +53,22 @@ public class TeamController {
     @GetMapping("/{teamId}/invitable-users")
     public ResponseEntity<List<InvitableUserDto>> getInvitableUsers(@PathVariable Long teamId) {
         return ResponseEntity.ok(teamService.findInvitableUsers(teamId));
+    }
+
+    /** 모든 교수 목록 조회 */
+    @GetMapping("/professors")
+    public ResponseEntity<List<UserDto>> getAllProfessors() {
+        return ResponseEntity.ok(teamService.getAllProfessors());
+    }
+
+    /** 팀에 교수 추가 */
+    @PostMapping("/{teamId}/professors")
+    public ResponseEntity<Void> addProfessorToTeam(
+            @PathVariable Long teamId,
+            @RequestBody MemberReq request,
+            @AuthenticationPrincipal UserAccount requester) {
+        teamService.addProfessorToTeam(teamId, request.userId(), requester.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /** 팀 생성 (로그인한 사용자 = 팀장) **/
@@ -73,17 +89,6 @@ public class TeamController {
     ) {
         teamService.inviteMember(teamId, request.userId(), requester.getId());
         return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
-
-    /** 팀원 초대 응답 (수락/거절) */
-    @PostMapping("/invitations/{invitationId}")
-    public ResponseEntity<TeamInvitation> respondToInvitation(
-            @PathVariable Long invitationId,
-            @RequestParam boolean accept,
-            @AuthenticationPrincipal UserAccount invitee
-    ) {
-        TeamInvitation updatedInvitation = teamService.respondToInvitation(invitationId, accept, invitee.getId());
-        return ResponseEntity.ok(updatedInvitation);
     }
 
     /** 공지 보내기（교수）*/
@@ -133,5 +138,23 @@ public class TeamController {
             @AuthenticationPrincipal UserAccount requester) {
         teamService.deleteTeam(teamId, requester.getId());
         return ResponseEntity.noContent().build();
+    }
+
+    /** 팀의 교수 목록 조회 */
+    @GetMapping("/{teamId}/professors")
+    public ResponseEntity<List<UserDto>> listProfessors(@PathVariable Long teamId) {
+        return ResponseEntity.ok(teamService.listTeamMembersByRole(teamId, Role.PROFESSOR));
+    }
+
+    /** 모든 팀에서 교수/강사 제거 (관리자 전용) */
+    @DeleteMapping("/cleanup/professors-and-tas")
+    public ResponseEntity<String> removeProfessorsAndTAs(@AuthenticationPrincipal UserAccount requester) {
+        // 관리자만 실행 가능
+        if (requester.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "관리자만 실행할 수 있습니다.");
+        }
+
+        int removedCount = teamService.removeProfessorsAndTAsFromAllTeams();
+        return ResponseEntity.ok(String.format("팀에서 %d명의 교수/강사가 제거되었습니다.", removedCount));
     }
 }
