@@ -125,7 +125,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     })();
   }, [isAdmin]);
 
-<<<<<<< HEAD
   /** 대시보드에서 `/projects?open=overview&edit=1&projectId=123` 로 들어온 경우 처리 */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -138,7 +137,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       setDetailIntent({ tab: open, edit: edit === "1" || edit === "true" });
     }
   }, []);
-=======
+
   // Load archived projects when archived tab is selected
   useEffect(() => {
     if (tab === "archived" && archivedProjects.length === 0) {
@@ -156,7 +155,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       })();
     }
   }, [tab, archivedProjects.length]);
->>>>>>> feat/project-create-from-merge
 
   /** 탭/검색 2차 필터 + 최근 업데이트 정렬 */
   const filtered = useMemo(() => {
@@ -207,43 +205,12 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     }
   };
 
-<<<<<<< HEAD
   /** '보고서 작성' 퀵 액션 (관리자/교수 등에서 사용 가능) */
   const quickWriteReport = (projectId: number) => {
     setDetailProjectId(projectId);
     setDetailIntent({ tab: "overview", edit: true });
   };
 
-  const renderActions = (p: ProjectListDto) => {
-    if (userRole === "student") {
-      // 중복 기능 제거: 학생은 '열람'과 'GitHub'만 제공
-      return (
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDetailProjectId(p.id)}
-            aria-label="프로젝트 열람"
-            title="프로젝트 열람"
-          >
-            <Eye className="h-4 w-4 mr-1" />
-            열람
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => openGithub(p.id)}
-            aria-label="GitHub 열기"
-            title="GitHub 열기"
-          >
-            <GitBranch className="h-4 w-4 mr-1" />
-            GitHub
-          </Button>
-        </div>
-      );
-    }
-    if (userRole === "professor") {
-=======
   /** Handle successful archive/restore/purge operations */
   const handleProjectArchived = (projectId: number) => {
     // Remove from active projects and add to archived
@@ -287,7 +254,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
     if (isArchived) {
       // Actions for archived projects
->>>>>>> feat/project-create-from-merge
       return (
         <div className="flex gap-2">
           <Button
@@ -300,61 +266,26 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
             <Eye className="h-4 w-4 mr-1" />
             열람
           </Button>
-<<<<<<< HEAD
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => openGithub(p.id)}
-            aria-label="GitHub 열기"
-            title="GitHub 열기"
-          >
-            <GitBranch className="h-4 w-4 mr-1" />
-            GitHub
-=======
           <Button size="sm" variant="outline" onClick={() => handleProjectRestored(p.id)}>
             <RotateCcw className="h-4 w-4 mr-1" />
             복원
->>>>>>> feat/project-create-from-merge
           </Button>
           <Button
             size="sm"
             variant="outline"
-<<<<<<< HEAD
-            onClick={() => setFeedbackProjectId(p.id)}
-            aria-label="피드백 열기"
-            title="피드백 열기"
-          >
-            <MessageSquare className="h-4 w-4 mr-1" />
-            피드백
-=======
             onClick={() => setPurgeProject(p)}
             className="text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="h-4 w-4 mr-1" />
             영구삭제
->>>>>>> feat/project-create-from-merge
           </Button>
         </div>
       );
     }
-<<<<<<< HEAD
-    // admin
-    return (
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setDetailProjectId(p.id)}
-          aria-label="프로젝트 열람"
-          title="프로젝트 열람"
-        >
-=======
-
     // Actions for active projects
     const commonActions = (
       <>
         <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
->>>>>>> feat/project-create-from-merge
           <Eye className="h-4 w-4 mr-1" />
           열람
         </Button>
@@ -368,15 +299,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           <GitBranch className="h-4 w-4 mr-1" />
           GitHub
         </Button>
-<<<<<<< HEAD
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => quickWriteReport(p.id)}
-          aria-label="프로젝트 편집"
-          title="프로젝트 편집"
-        >
-=======
       </>
     );
 
@@ -384,7 +306,11 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       return (
         <div className="flex gap-2">
           {commonActions}
-          <Button size="sm" variant="outline">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => quickWriteReport(p.id)}
+          >
             <FileText className="h-4 w-4 mr-1" />
             보고서 작성
           </Button>
@@ -434,8 +360,11 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     return (
       <div className="flex gap-2">
         {commonActions}
-        <Button size="sm" variant="outline">
->>>>>>> feat/project-create-from-merge
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => quickWriteReport(p.id)}
+        >
           <Edit className="h-4 w-4 mr-1" />
           편집
         </Button>
@@ -484,11 +413,11 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </p>
         </div>
         {userRole === "student" && (
-<<<<<<< HEAD
-          <Button aria-label="새 프로젝트 만들기" title="새 프로젝트 만들기">
-=======
-          <Button onClick={handleCreateProjectClick}>
->>>>>>> feat/project-create-from-merge
+          <Button
+            onClick={handleCreateProjectClick}
+            aria-label="새 프로젝트 만들기"
+            title="새 프로젝트 만들기"
+          >
             <Plus className="h-4 w-4 mr-2" />
             새 프로젝트
           </Button>

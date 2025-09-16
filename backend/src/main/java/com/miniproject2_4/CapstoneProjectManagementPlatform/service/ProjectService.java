@@ -444,15 +444,11 @@ public class ProjectService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아카이브된 프로젝트만 영구 삭제할 수 있습니다.");
         }
 
-<<<<<<< HEAD
-=======
         // Delete related resources in order to avoid foreign key constraints
         // Note: This is a simplified implementation. In production, you might want to:
         // 1. Cascade delete or set null on related entities
         // 2. Archive related data instead of deleting
         // 3. Use background job for cleanup
-
->>>>>>> feat/project-create-from-merge
         projectRepository.delete(project);
     }
 
