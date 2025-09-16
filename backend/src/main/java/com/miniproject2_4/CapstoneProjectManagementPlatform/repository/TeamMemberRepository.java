@@ -50,4 +50,19 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMemb
     @Modifying
     @Query("DELETE FROM TeamMember tm WHERE tm.id.teamId = :teamId")
     void deleteByTeamId(@Param("teamId") Long teamId);
+
+    /** 교수/강사 권한을 가진 팀 멤버들 조회 */
+    @Query("""
+        select tm
+          from TeamMember tm
+          join fetch tm.user u
+         where tm.user.role in (:roles)
+         order by tm.team.id, u.name
+    """)
+    List<TeamMember> findMembersByUserRole(@Param("roles") List<Role> roles);
+
+    /** 특정 권한을 가진 팀 멤버들 삭제 */
+    @Modifying
+    @Query("DELETE FROM TeamMember tm WHERE tm.user.role in (:roles)")
+    void deleteMembersByUserRole(@Param("roles") List<Role> roles);
 }

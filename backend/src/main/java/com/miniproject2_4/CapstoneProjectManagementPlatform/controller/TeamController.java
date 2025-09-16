@@ -53,6 +53,22 @@ public class TeamController {
         return ResponseEntity.ok(teamService.findInvitableUsers(teamId));
     }
 
+    /** 모든 교수 목록 조회 */
+    @GetMapping("/professors")
+    public ResponseEntity<List<UserDto>> getAllProfessors() {
+        return ResponseEntity.ok(teamService.getAllProfessors());
+    }
+
+    /** 팀에 교수 추가 */
+    @PostMapping("/{teamId}/professors")
+    public ResponseEntity<Void> addProfessorToTeam(
+            @PathVariable Long teamId,
+            @RequestBody MemberReq request,
+            @AuthenticationPrincipal UserAccount requester) {
+        teamService.addProfessorToTeam(teamId, request.userId(), requester.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
     /** 팀 생성 (로그인한 사용자 = 리더) **/
     @PostMapping
     public ResponseEntity<TeamListDto.Response> createTeam(
@@ -109,5 +125,17 @@ public class TeamController {
             @AuthenticationPrincipal UserAccount requester) {
         teamService.deleteTeam(teamId, requester.getId());
         return ResponseEntity.noContent().build();
+    }
+
+    /** 모든 팀에서 교수/강사 제거 (관리자 전용) */
+    @DeleteMapping("/cleanup/professors-and-tas")
+    public ResponseEntity<String> removeProfessorsAndTAs(@AuthenticationPrincipal UserAccount requester) {
+        // 관리자만 실행 가능
+        if (requester.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "관리자만 실행할 수 있습니다.");
+        }
+
+        int removedCount = teamService.removeProfessorsAndTAsFromAllTeams();
+        return ResponseEntity.ok(String.format("팀에서 %d명의 교수/강사가 제거되었습니다.", removedCount));
     }
 }

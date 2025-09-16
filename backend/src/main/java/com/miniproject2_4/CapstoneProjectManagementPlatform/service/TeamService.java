@@ -248,4 +248,77 @@ public class TeamService {
         return teamMemberRepository.findById(new TeamMemberId(teamId, userId))
                 .orElseThrow(() -> new EntityNotFoundException("해당 팀원을 찾을 수 없습니다: " + userId));
     }
+
+    /** 모든 교수 목록 조회 */
+    public List<UserDto> getAllProfessors() {
+        List<UserAccount> professors = userRepository.findByRole(Role.PROFESSOR);
+        return professors.stream()
+                .map(prof -> new UserDto(prof.getId(), prof.getName(), prof.getEmail()))
+                .toList();
+    }
+
+    /** 팀에 교수 추가 */
+    @Transactional
+    public void addProfessorToTeam(Long teamId, Long professorId, Long requesterId) {
+        // 팀 존재 확인
+        Team team = findTeamById(teamId);
+
+        // 요청자가 팀 멤버인지 확인
+        boolean isRequesterMember = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, requesterId);
+        if (!isRequesterMember) {
+            throw new AccessDeniedException("팀 멤버만 교수를 추가할 수 있습니다.");
+        }
+
+        // 교수 존재 및 권한 확인
+        UserAccount professor = findUserById(professorId);
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new IllegalArgumentException("해당 사용자는 교수가 아닙니다.");
+        }
+
+        // 이미 팀에 있는지 확인
+        boolean isAlreadyMember = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, professorId);
+        if (isAlreadyMember) {
+            throw new IllegalStateException("이미 팀에 소속된 교수입니다.");
+        }
+
+        // 교수를 팀 멤버로 추가 (일반 멤버로)
+        TeamMember newMember = TeamMember.builder()
+                .id(new TeamMemberId(teamId, professorId))
+                .team(team)
+                .user(professor)
+                .roleInTeam("MEMBER")
+                .build();
+
+        teamMemberRepository.save(newMember);
+    }
+
+    /** 모든 팀에서 교수/강사 권한을 가진 멤버들 제거 */
+    @Transactional
+    public int removeProfessorsAndTAsFromAllTeams() {
+        // 제거할 권한 목록
+        List<Role> rolesToRemove = Arrays.asList(Role.PROFESSOR, Role.TA);
+
+        // 제거하기 전에 해당 멤버들을 조회해서 로그 출력
+        List<TeamMember> membersToRemove = teamMemberRepository.findMembersByUserRole(rolesToRemove);
+
+        if (membersToRemove.isEmpty()) {
+            return 0;
+        }
+
+        // 제거할 멤버들 정보 출력 (디버깅용)
+        System.out.println("=== 팀에서 제거될 교수/강사 멤버들 ===");
+        for (TeamMember member : membersToRemove) {
+            System.out.printf("팀 ID: %d, 사용자: %s (%s), 권한: %s%n",
+                member.getTeam().getId(),
+                member.getUser().getName() != null ? member.getUser().getName() : member.getUser().getEmail(),
+                member.getUser().getEmail(),
+                member.getUser().getRole()
+            );
+        }
+
+        // 실제 삭제 실행
+        teamMemberRepository.deleteMembersByUserRole(rolesToRemove);
+
+        return membersToRemove.size();
+    }
 }

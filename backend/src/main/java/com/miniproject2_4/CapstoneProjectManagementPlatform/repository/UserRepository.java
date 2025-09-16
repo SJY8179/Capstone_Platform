@@ -15,4 +15,7 @@ public interface UserRepository extends JpaRepository<UserAccount, Long> {
 
     /** 특정 권한을 가진 첫 번째 사용자 조회 */
     Optional<UserAccount> findFirstByRole(Role role);
+
+    /** 특정 권한을 가진 모든 사용자 조회 */
+    List<UserAccount> findByRole(Role role);
 }

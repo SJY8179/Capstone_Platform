@@ -54,3 +54,14 @@ export async function removeMember(teamId: number, memberId: number) {
 export async function deleteTeam(teamId: number) {
   await http.delete(`/teams/${teamId}`);
 }
+
+/** 모든 교수 목록 조회 */
+export async function getAllProfessors() {
+  const { data } = await http.get<Array<{ id: number; name: string; email: string }>>("/teams/professors");
+  return data;
+}
+
+/** 팀에 교수 추가 */
+export async function addProfessorToTeam(teamId: number, professorId: number) {
+  await http.post(`/teams/${teamId}/professors`, { userId: professorId });
+}
