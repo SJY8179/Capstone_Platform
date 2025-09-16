@@ -101,4 +101,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
            and prof.id = :userId
     """)
     List<Project> findAllByProfessorUserIdAndArchived(@Param("userId") Long userId, @Param("archived") Boolean archived);
+
+    /** 추가: 활성(archived=false) 프로젝트 수 */
+    long countByProfessor_Id(Long userId);
 }

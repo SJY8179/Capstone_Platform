@@ -17,5 +17,5 @@ jobs:
       - name: Build backend
         working-directory: backend
         run: |
-          chmod +x ./mvnw || true
-          ./mvnw -q -DskipTests -f backend/pom.xml package
+          - name: Build backend
+          run: mvn -f backend/pom.xml clean package

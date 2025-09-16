@@ -3,6 +3,8 @@ import type {
   DashboardSummary,
   DashboardStatus,
   DeadlineItem,
+  AdminSummary,
+  SystemActivity,
 } from "@/types/domain";
 
 /* ===== 프로젝트 단위 대시보드 ===== */
@@ -68,5 +70,18 @@ export type ProfessorSummary = {
 
 export async function getProfessorSummary() {
   const { data } = await http.get<ProfessorSummary>(`/dashboard/professor/summary`);
+  return data;
+}
+
+/* ===== 관리자 대시보드 ===== */
+export async function getAdminSummary() {
+  const { data } = await http.get<AdminSummary>(`/admin/dashboard/summary`);
+  return data;
+}
+
+export async function getAdminActivity(limit = 20) {
+  const { data } = await http.get<SystemActivity[]>(`/admin/dashboard/activity`, {
+    params: { limit },
+  });
   return data;
 }

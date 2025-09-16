@@ -4,6 +4,7 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.Profe
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,10 @@ public class DashboardService {
     private final EventRepository eventRepository;
     private final TeamMemberRepository teamMemberRepository;
 
+    /** 관리자 요약 집계에 필요 */
+    private final UserRepository userRepository;
+    private final ProjectOverviewRepository projectOverviewRepository;
+
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     /* ========= DTO ========= */
@@ -39,7 +44,26 @@ public class DashboardService {
     public record Status(int progressPct, String lastUpdate, List<String> actions) {}
     public record DeadlineItem(String title, String dueDate) {}
 
-    /* ========= 기존 Project 단위 대시보드 ========= */
+    /** 관리자 대시보드용 DTO */
+    public record AdminSummary(
+            long totalUsers,
+            long activeCourses,
+            long activeProjects,
+            double uptimePct
+    ) {}
+
+    public record ActivityItem(
+            Long id,
+            String title,
+            String type,
+            Long projectId,
+            String projectTitle,
+            LocalDateTime startAt,
+            LocalDateTime endAt,
+            String location
+    ) {}
+
+    /* ========= 프로젝트 단위 대시보드 ========= */
     public Summary getSummary(Long projectId) {
         Project p = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
@@ -98,12 +122,7 @@ public class DashboardService {
     }
 
     /* ========= 교수 대시보드 요약 ========= */
-    /**
-     * “검토 대기”는 **PENDING만** 포함.
-     * - 반려(Reject) 시 ONGOING 으로 변경되므로 목록/카운트에서 제외.
-     */
     public ProfessorSummaryDto getProfessorSummary(Long professorUserId) {
-        // 담당/참여 교수 기준: 팀 멤버십으로 연계
         List<Project> myProjects = projectRepository.findAllByProfessorUserId(professorUserId);
         if (myProjects.isEmpty()) {
             return new ProfessorSummaryDto(
@@ -114,30 +133,25 @@ public class DashboardService {
 
         List<Long> projectIds = myProjects.stream().map(Project::getId).toList();
 
-        // 프로젝트별 과제
         List<Assignment> allAssignments = assignmentRepository.findByProject_IdIn(projectIds);
         Map<Long, List<Assignment>> byProject = allAssignments.stream()
                 .collect(Collectors.groupingBy(a -> a.getProject().getId()));
 
-        // 메트릭 계산
         int courses = myProjects.size();
         int runningTeams = (int) myProjects.stream()
                 .map(Project::getTeam).filter(Objects::nonNull)
                 .map(Team::getId).distinct().count();
 
-        // 학생 수(중복 제거, 교수/관리자 제외)
         List<Long> teamIds = myProjects.stream()
                 .map(Project::getTeam).filter(Objects::nonNull)
                 .map(Team::getId).distinct().toList();
         int studentCount = teamIds.isEmpty() ? 0 :
                 (int) teamMemberRepository.countDistinctMembersByTeamIdsAndUserRole(teamIds, Role.STUDENT);
 
-        // 검토 대기: PENDING만
         int pendingReviews = (int) allAssignments.stream()
                 .filter(a -> a.getStatus() == AssignmentStatus.PENDING)
                 .count();
 
-        // 평균 진행률
         double avgProgress = myProjects.stream().mapToDouble(p -> {
             List<Assignment> list = byProject.getOrDefault(p.getId(), List.of());
             if (list.isEmpty()) return 0.0;
@@ -148,7 +162,6 @@ public class DashboardService {
 
         ZoneId zone = ZoneId.systemDefault();
 
-        // 검토 대기 목록 — PENDING만, 마감 임박순
         List<ProfessorSummaryDto.PendingReviewItem> pending = allAssignments.stream()
                 .filter(a -> a.getStatus() == AssignmentStatus.PENDING)
                 .sorted(Comparator.comparing(
@@ -165,7 +178,6 @@ public class DashboardService {
                 ))
                 .toList();
 
-        // 최근 제출물 — 최신 10건
         List<ProfessorSummaryDto.RecentSubmission> recent = allAssignments.stream()
                 .sorted(Comparator.comparing((Assignment a) ->
                         Optional.ofNullable(a.getUpdatedAt())
@@ -183,7 +195,6 @@ public class DashboardService {
                 ))
                 .toList();
 
-        // 상위 성과 팀
         List<ProfessorSummaryDto.TopTeam> top = myProjects.stream()
                 .map(p -> {
                     List<Assignment> list = byProject.getOrDefault(p.getId(), List.of());
@@ -214,5 +225,36 @@ public class DashboardService {
     private static OffsetDateTime toOffset(LocalDateTime ts, ZoneId zone) {
         if (ts == null) return null;
         return ts.atZone(zone).toOffsetDateTime();
+    }
+
+    /* ========= 관리자 대시보드 ========= */
+
+    public AdminSummary getAdminSummary() {
+        long totalUsers = userRepository.count();
+
+        // countByArchivedFalse() 대신 이미 존재하는 쿼리 메서드로 안전하게 계산
+        long activeProjects = projectRepository.findAllWithTeamByArchived(false).size();
+
+        long activeCourses = projectOverviewRepository
+                .countByStatusAndProject_ArchivedFalse(ProjectOverview.Status.PUBLISHED);
+
+        double uptimePct = 99.9; // 추후 헬스체크 연동 가능
+
+        return new AdminSummary(totalUsers, activeCourses, activeProjects, uptimePct);
+    }
+
+    public List<ActivityItem> getRecentActivities(int limit) {
+        int size = Math.max(1, Math.min(limit, 100));
+        var events = eventRepository.findByProject_ArchivedFalseOrderByStartAtDesc(PageRequest.of(0, size));
+        return events.stream().map(e -> new ActivityItem(
+                e.getId(),
+                e.getTitle(),
+                e.getType() != null ? e.getType().name() : null,
+                e.getProject() != null ? e.getProject().getId() : null,
+                (e.getProject() != null ? e.getProject().getTitle() : null),
+                e.getStartAt(),
+                e.getEndAt(),
+                e.getLocation()
+        )).toList();
     }
 }

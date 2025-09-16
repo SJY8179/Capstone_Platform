@@ -2,19 +2,19 @@ package com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-public record CreateProjectRequest(
-        @NotBlank(message = "프로젝트 이름은 필수입니다.")
-        @Size(max = 100, message = "프로젝트 이름은 100자를 초과할 수 없습니다.")
-        String title,
+@Getter @Setter @NoArgsConstructor
+public class CreateProjectRequest {
 
-        @Size(max = 500, message = "프로젝트 설명은 500자를 초과할 수 없습니다.")
-        String description,
+    @NotBlank(message = "프로젝트 제목은 필수입니다.")
+    private String title;
 
-        @NotNull(message = "팀을 선택해야 합니다.")
-        Long teamId,
+    @NotNull(message = "teamId는 필수입니다.")
+    private Long teamId;
 
-        /** 담당 교수 ID (선택적) */
-        Long professorId
-) {}
+    /** 선택: 명시적으로 담당 교수 지정 */
+    private Long professorId;
+}

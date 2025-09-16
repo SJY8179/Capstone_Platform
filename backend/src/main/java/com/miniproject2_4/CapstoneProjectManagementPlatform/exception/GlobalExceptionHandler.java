@@ -71,4 +71,11 @@ public class GlobalExceptionHandler {
         log.error("500 INTERNAL SERVER ERROR", e);
         return Map.of("message", "서버 오류가 발생했습니다.");
     }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Map<String, Object> conflict(org.springframework.dao.DataIntegrityViolationException e) {
+        String reason = e.getMostSpecificCause() != null ? e.getMostSpecificCause().getMessage() : e.getMessage();
+        return Map.of("error","DATA_INTEGRITY_VIOLATION","message", reason);
+    }
 }

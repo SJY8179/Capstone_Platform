@@ -1,6 +1,5 @@
-﻿// === path : src/api/teams.ts
-import { http } from "@/api/http";
-import type { TeamListDto } from "@/types/domain";
+﻿import { http } from "@/api/http";
+import type { TeamListDto, UserDto } from "@/types/domain";
 
 /** (학생/교수/관리자 공통) 내가 팀 멤버로 속한 팀 */
 export async function listTeams() {
@@ -17,6 +16,12 @@ export async function listTeachingTeams() {
 /** (관리자) 전체 팀 */
 export async function listAllTeams() {
   const { data } = await http.get<TeamListDto[]>("/teams");
+  return data;
+}
+
+/** ⬇ 초대 가능한 사용자 목록 */
+export async function listInvitableUsers(teamId: number) {
+  const { data } = await http.get<UserDto[]>(`/teams/${teamId}/invitable-users`);
   return data;
 }
 
@@ -53,4 +58,9 @@ export async function removeMember(teamId: number, memberId: number) {
 /** 팀 삭제 */
 export async function deleteTeam(teamId: number) {
   await http.delete(`/teams/${teamId}`);
+}
+
+export async function listTeamProfessors(teamId: number) {
+  const { data } = await http.get<UserDto[]>(`/teams/${teamId}/professors`);
+  return data;
 }

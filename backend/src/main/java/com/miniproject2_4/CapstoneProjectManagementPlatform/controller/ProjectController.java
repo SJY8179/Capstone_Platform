@@ -23,8 +23,7 @@ import java.util.List;
 public class ProjectController {
     private final ProjectService projectService;
 
-    /**
-     * 전체 프로젝트 목록: /api/projects
+    /** 전체 프로젝트 목록: /api/projects (관리자 용도, 현재는 인증만 요구)
      * Query param: status=active|archived (default: active)
      */
     @GetMapping("/projects")
