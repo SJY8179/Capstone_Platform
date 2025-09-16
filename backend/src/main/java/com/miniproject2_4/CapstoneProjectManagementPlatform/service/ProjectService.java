@@ -1,5 +1,6 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.service;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.CreateProjectRequest;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectDetailDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
@@ -21,9 +22,11 @@ import java.util.*;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
+    private final UserRepository userRepository;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -32,6 +35,34 @@ public class ProjectService {
         return projectRepository.findAllWithTeam().stream()
                 .map(this::toListDto)
                 .toList();
+    }
+
+    /** 새 프로젝트 생성: 기존 팀 선택 */
+    @Transactional
+    public ProjectListDto createProject(CreateProjectRequest request, UserAccount creator) {
+        if (creator == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
+        // 팀 조회
+        Team team = teamRepository.findById(request.teamId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "선택한 팀이 존재하지 않습니다."));
+
+        // 해당 팀의 멤버인지 확인
+        boolean isMember = teamMemberRepository.existsByTeam_IdAndUser_Id(team.getId(), creator.getId());
+        if (!isMember) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "선택한 팀의 멤버가 아닙니다.");
+        }
+
+        // 프로젝트 생성 (상태는 PLANNING으로 시작)
+        Project project = Project.builder()
+                .title(request.title())
+                .team(team)
+                .status(Project.Status.PLANNING)
+                .build();
+        project = projectRepository.save(project);
+
+        return toListDto(project);
     }
 
     /**
@@ -61,6 +92,27 @@ public class ProjectService {
         return projectRepository.findAllByProfessorUserId(userId).stream()
                 .map(this::toListDto)
                 .toList();
+    }
+
+    /** List projects by archived status */
+    public List<ProjectListDto> listProjectsForUser(UserAccount ua, String status) {
+        if (ua == null) return List.of();
+
+        Boolean archived = "archived".equals(status);
+
+        if (ua.getRole() == Role.ADMIN) {
+            return projectRepository.findAllWithTeamByArchived(archived).stream()
+                    .map(this::toListDto)
+                    .toList();
+        } else if (ua.getRole() == Role.PROFESSOR) {
+            return projectRepository.findAllByProfessorUserIdAndArchived(ua.getId(), archived).stream()
+                    .map(this::toListDto)
+                    .toList();
+        } else {
+            return projectRepository.findAllByMemberUserIdAndArchived(ua.getId(), archived).stream()
+                    .map(this::toListDto)
+                    .toList();
+        }
     }
 
     /** 프로젝트 상세 (권한 확인 포함) */
@@ -206,7 +258,7 @@ public class ProjectService {
             p.setGithubRepo(repo);
         }
 
-        // 커밋 시점 flush, 최신 상세 반환
+        projectRepository.flush(); // 조회 전에 DB 반영
         return getProjectDetail(projectId, actor);
     }
 
@@ -326,5 +378,120 @@ public class ProjectService {
         if (a == null) return b;
         if (b == null) return a;
         return a.isAfter(b) ? a : b;
+    }
+
+    /* ===== Archive/Restore/Purge Operations ===== */
+
+    /** Archive project (soft delete) */
+    @Transactional
+    public void archiveProject(Long projectId, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+
+        // Permission check: only ADMIN, PROFESSOR (if assigned), or team owner can archive
+        checkArchivePermission(project, actor);
+
+        // Idempotent: if already archived, just return success
+        if (project.getArchived()) {
+            return;
+        }
+
+        project.setArchived(true);
+        projectRepository.save(project);
+    }
+
+    /** Restore project from archive */
+    @Transactional
+    public void restoreProject(Long projectId, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+
+        // Permission check: only ADMIN, PROFESSOR (if assigned), or team owner can restore
+        checkArchivePermission(project, actor);
+
+        // Idempotent: if not archived, just return success
+        if (!project.getArchived()) {
+            return;
+        }
+
+        project.setArchived(false);
+        projectRepository.save(project);
+    }
+
+    /** Permanently delete project and related resources */
+    @Transactional
+    public void purgeProject(Long projectId, UserAccount actor) {
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
+
+        // Permission check: only ADMIN or project owner can permanently delete
+        checkPurgePermission(project, actor);
+
+        // Safety check: project should be archived first
+        if (!project.getArchived()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아카이브된 프로젝트만 영구 삭제할 수 있습니다.");
+        }
+
+        projectRepository.delete(project);
+    }
+
+    /** Check if user can archive/restore project */
+    private void checkArchivePermission(Project project, UserAccount actor) {
+        if (actor.getRole() == Role.ADMIN) {
+            return; // Admin can archive/restore any project
+        }
+
+        if (actor.getRole() == Role.PROFESSOR) {
+            // Professor can archive if they are assigned to the project
+            if (project.getProfessor() != null && project.getProfessor().getId().equals(actor.getId())) {
+                return;
+            }
+        }
+
+        // Students can archive projects if they are team members
+        if (project.getTeam() != null) {
+            boolean isMember = teamMemberRepository.existsByTeam_IdAndUser_Id(project.getTeam().getId(), actor.getId());
+            if (isMember) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "프로젝트를 아카이브할 권한이 없습니다.");
+    }
+
+    /** Check if user can permanently delete project */
+    private void checkPurgePermission(Project project, UserAccount actor) {
+        if (actor.getRole() == Role.ADMIN) {
+            return; // Admin can purge any project
+        }
+
+        if (actor.getRole() == Role.PROFESSOR) {
+            // Professor can purge if they are assigned to the project
+            if (project.getProfessor() != null && project.getProfessor().getId().equals(actor.getId())) {
+                return;
+            }
+        }
+
+        // Only team members can purge their own project
+        if (project.getTeam() != null) {
+            boolean isMember = teamMemberRepository.existsByTeam_IdAndUser_Id(project.getTeam().getId(), actor.getId());
+            if (isMember) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "프로젝트를 영구 삭제할 권한이 없습니다.");
     }
 }

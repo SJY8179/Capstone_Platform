@@ -1,5 +1,4 @@
-﻿// === path : src/App.tsx
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { LoginForm } from "@/components/Auth/LoginForm";
 import { Sidebar } from "@/components/Layout/Sidebar";
 import { Header } from "@/components/Layout/Header";
@@ -277,6 +276,8 @@ export default function App() {
           activeProjectId={activeProjectId}
           onChangeActiveProject={(id) => setActiveProjectId(id)}
           onNotificationClick={() => setActivePage("notifications")} // 헤더 드롭다운 → 알림 센터로 이동
+          /** ✅ 헤더 드롭다운 '설정' 클릭 시 Settings 탭으로 이동 */
+          onOpenSettings={() => setActivePage("settings")}
         />
         <main className="flex-1 overflow-auto p-6">{renderMainContent()}</main>
       </div>

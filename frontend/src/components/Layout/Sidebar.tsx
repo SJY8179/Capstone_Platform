@@ -22,6 +22,8 @@ import type { UserRole } from "@/types/user";
 import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type { ScheduleDto, SchedulePriority, ScheduleType } from "@/types/domain";
 import { scheduleBus } from "@/lib/schedule-bus";
+import { fetchNotifications, countUnread } from "@/api/notifications";
+import { appBus } from "@/lib/app-bus";
 
 interface SidebarProps {
   userRole: UserRole;
@@ -63,6 +65,7 @@ export function Sidebar({
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
   const [upcoming, setUpcoming] = useState<UiSchedule[]>([]);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
+  const [notifUnread, setNotifUnread] = useState<number>(0);
 
   const getMenuItems = () => {
     const common = [
@@ -134,7 +137,7 @@ export function Sidebar({
     } catch (e: any) {
       if (e?.status === 403 || e?.response?.status === 403) {
         setUpcoming([]);
-      } else {
+    } else {
         console.debug("Failed to load upcoming schedules:", e);
         setUpcoming([]);
       }
@@ -143,20 +146,26 @@ export function Sidebar({
     }
   }, [projectId]);
 
+  const reloadUnread = useCallback(async () => {
+    const list = await fetchNotifications({ projectId }).catch(() => []);
+    setNotifUnread(countUnread(list));
+  }, [projectId]);
+
   useEffect(() => {
     reloadUpcoming();
-    const unsub = scheduleBus.subscribe(() => {
+    reloadUnread();
+
+    const unsubSchedule = scheduleBus.subscribe?.(() => {
       if (projectId) invalidateSchedulesCache(projectId);
       reloadUpcoming();
     });
+    const unsubNotif = appBus.onNotificationsChanged(() => reloadUnread());
+
     return () => {
-      try {
-        unsub?.();
-      } catch {
-        /* ignore */
-      }
+      try { unsubSchedule?.(); } catch {}
+      try { unsubNotif?.(); } catch {}
     };
-  }, [reloadUpcoming, projectId]);
+  }, [reloadUpcoming, reloadUnread, projectId]);
 
   useEffect(() => {
     if (showScheduleDropdown) reloadUpcoming();
@@ -322,10 +331,11 @@ export function Sidebar({
               {!collapsed && (
                 <>
                   <span>공지/메시지</span>
-                  {/* TODO: 실제 알림 데이터와 연동 */}
-                  <Badge variant="destructive" className="ml-auto h-5 px-1.5 text-[10px] leading-5">
-                    3
-                  </Badge>
+                  {notifUnread > 0 && (
+                    <Badge variant="destructive" className="ml-auto h-5 px-1.5 text-[10px] leading-5">
+                      {notifUnread > 99 ? "99+" : notifUnread}
+                    </Badge>
+                  )}
                 </>
               )}
             </Button>

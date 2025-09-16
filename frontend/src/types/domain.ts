@@ -1,5 +1,3 @@
-// === path : src/types/domain.ts
-
 /** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
@@ -216,4 +214,24 @@ export interface BulkReviewResult {
   successCount: number;
   failCount: number;
   failedIds: number[];
+}
+
+/** ====== Notifications (프론트 집계형) ====== */
+export type NotificationType = "commit" | "feedback" | "schedule" | "team" | "assignment" | "system";
+export type NotificationPriority = "low" | "medium" | "high";
+
+/** App 전역에서 사용하는 알림 모델(프론트 집계 결과) */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  /** ISO 문자열 (저장/정렬 일관성 위해 Date 대신 ISO 사용) */
+  timestamp: string;
+  read: boolean;
+  priority: NotificationPriority;
+  relatedId?: string;
+  author?: { name: string; avatar?: string };
+  projectId?: number;
+  projectName?: string | null;
 }

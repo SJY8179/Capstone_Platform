@@ -1,5 +1,5 @@
-﻿import { http } from "@/api/http";
-import type { ProjectListDto, ProjectStatus, ProjectDetailDto } from "@/types/domain";
+﻿﻿import { http } from "@/api/http";
+import type { ProjectListDto, ProjectStatus, ProjectDetailDto, CreateProjectRequest } from "@/types/domain";
 
 /** 상태 문자열을 우리 타입으로 통일 */
 function normalizeStatus(raw: any): ProjectStatus {
@@ -328,6 +328,12 @@ export async function listProjects(opts?: { isAdmin?: boolean }): Promise<Projec
   return listMyProjects();
 }
 
+/** 새 프로젝트 생성 */
+export async function createProject(request: CreateProjectRequest): Promise<ProjectListDto> {
+  const { data } = await http.post("/projects", request);
+  return normalizeProject(data);
+}
+
 /** 프로젝트 상세 */
 export async function getProjectDetail(projectId: number): Promise<ProjectDetailDto> {
   const { data } = await http.get(`/projects/${projectId}`);
@@ -341,4 +347,49 @@ export async function updateProjectRepo(
 ): Promise<ProjectDetailDto> {
   const { data } = await http.put(`/projects/${projectId}/repo`, { githubUrl });
   return normalizeProjectDetail(data);
+}
+
+/** GitHub URL 조립 */
+export const buildGithubUrl = (owner?: string | null, name?: string | null) =>
+  owner && name ? `https://github.com/${owner}/${name}` : null;
+
+/** GitHub 입력 파서 */
+export function parseGithubInput(text: string): { owner: string; name: string; url: string } | null {
+  if (!text) return null;
+  const t = text.trim().replace(/^git\+/, "").replace(/\.git$/, "");
+  const m1 = t.match(/github\.com[/:]([^/]+)\/([^/#?]+)/i);
+  if (m1?.[1] && m1?.[2]) {
+    const owner = m1[1];
+    const name = m1[2];
+    return { owner, name, url: `https://github.com/${owner}/${name}` };
+  }
+  const m2 = t.match(/^([^/\s]+)\/([^/#?\s]+)$/);
+  if (m2?.[1] && m2?.[2]) {
+    const owner = m2[1];
+    const name = m2[2];
+    return { owner, name, url: `https://github.com/${owner}/${name}` };
+  }
+  return null;
+}
+
+/** Archive project (soft delete) */
+export async function archiveProject(projectId: number): Promise<void> {
+  await http.delete(`/projects/${projectId}`);
+}
+
+/** Restore project from archive */
+export async function restoreProject(projectId: number): Promise<void> {
+  await http.post(`/projects/${projectId}/restore`);
+}
+
+/** Permanently delete project */
+export async function purgeProject(projectId: number): Promise<void> {
+  await http.delete(`/projects/${projectId}/purge`);
+}
+
+/** List archived projects */
+export async function listArchivedProjects(): Promise<ProjectListDto[]> {
+  const { data } = await http.get("/projects?status=archived");
+  const rows = normalizeListPayload(data);
+  return rows.map((r: any) => normalizeProject(r)).filter((p) => Number.isFinite(p.id));
 }

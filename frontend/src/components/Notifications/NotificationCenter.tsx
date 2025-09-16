@@ -1,9 +1,7 @@
-// === path : src/components/Notifications/NotificationCenter.tsx
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import {
@@ -20,62 +18,34 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { UserRole } from '@/types/user';
-
-export interface Notification {
-  id: string;
-  type: 'commit' | 'feedback' | 'schedule' | 'team' | 'assignment' | 'system';
-  title: string;
-  message: string;
-  timestamp: Date;
-  read: boolean;
-  priority: 'low' | 'medium' | 'high';
-  relatedId?: string;
-  author?: {
-    name: string;
-    avatar?: string;
-  };
-}
+import type { AppNotification as Notification } from '@/types/domain';
+import { fetchNotifications, markAllNotificationsAsRead, markNotificationAsRead, countUnread } from '@/api/notifications';
+import { appBus } from '@/lib/app-bus';
 
 interface NotificationCenterProps {
-  userRole: UserRole; // ✅ 앱 전역 UserRole 사용 (ta 포함)
+  userRole: UserRole; // ✅ 앱 전역 UserRole 사용
 }
 
-// 데모 데이터
-const demoNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'commit',
-    title: '새로운 커밋이 푸시되었습니다',
-    message: '김철수님이 "프론트엔드 로그인 기능 구현"을 커밋했습니다.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    read: false,
-    priority: 'medium',
-    author: { name: '김철수' }
-  },
-  {
-    id: '2',
-    type: 'feedback',
-    title: '새로운 피드백이 도착했습니다',
-    message: '박교수님이 중간 발표 자료에 피드백을 남겼습니다: "전체적으로 좋으나 기술적 세부사항이 부족합니다."',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    read: false,
-    priority: 'high',
-    author: { name: '박교수' }
-  },
-  {
-    id: '3',
-    type: 'schedule',
-    title: '오늘 일정 알림',
-    message: '오후 2시: 팀 미팅, 오후 4시: 멘토링 세션이 예정되어 있습니다.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3),
-    read: true,
-    priority: 'medium'
-  }
-];
-
 export function NotificationCenter({ userRole }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState<Notification[]>(demoNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const reload = async () => {
+    try {
+      setLoading(true);
+      const list = await fetchNotifications();
+      setNotifications(list);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    reload();
+    const off = appBus.onNotificationsChanged(() => reload());
+    return () => { try { off?.(); } catch {} };
+  }, []);
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
@@ -110,23 +80,27 @@ export function NotificationCenter({ userRole }: NotificationCenterProps) {
     }
   };
 
-  const markAsRead = (id: string) => {
+  const onMarkAsRead = (id: string) => {
+    markNotificationAsRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
-  const markAllAsRead = () => {
+  const onMarkAllAsRead = () => {
+    markAllNotificationsAsRead(notifications.map(n => n.id));
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const deleteNotification = (id: string) => {
+  const onDeleteLocal = (id: string) => {
+    // 서버 일괄 알림 없음 → 로컬에서만 제거
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  const filtered = notifications.filter(n =>
-    filter === 'unread' ? !n.read : filter === 'read' ? n.read : true
+  const filtered = useMemo(
+    () => notifications.filter(n => filter === 'unread' ? !n.read : filter === 'read' ? n.read : true),
+    [notifications, filter]
   );
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = useMemo(() => countUnread(notifications), [notifications]);
 
   return (
     <div className="space-y-6">
@@ -137,7 +111,7 @@ export function NotificationCenter({ userRole }: NotificationCenterProps) {
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onClick={markAllAsRead}>
+            <Button variant="outline" size="sm" onClick={onMarkAllAsRead}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
               모두 읽음 처리
             </Button>
@@ -156,7 +130,14 @@ export function NotificationCenter({ userRole }: NotificationCenterProps) {
         <TabsContent value={filter} className="mt-6">
           <ScrollArea className="h-[600px]">
             <div className="space-y-4">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-muted-foreground">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>불러오는 중…</p>
+                  </CardContent>
+                </Card>
+              ) : filtered.length === 0 ? (
                 <Card>
                   <CardContent className="p-8 text-center text-muted-foreground">
                     <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -188,22 +169,24 @@ export function NotificationCenter({ userRole }: NotificationCenterProps) {
                               <p className="text-sm text-muted-foreground">{n.message}</p>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Clock className="h-3 w-3" />
-                                <span>{formatDistanceToNow(n.timestamp, { addSuffix: true, locale: ko })}</span>
-                                {n.author && (<><span>•</span><span>{n.author.name}</span></>)}
+                                <span>{formatDistanceToNow(new Date(n.timestamp), { addSuffix: true, locale: ko })}</span>
+                                {n.author?.name && (<><span>•</span><span>{n.author.name}</span></>)}
+                                {n.projectName && (<><span>•</span><span>{n.projectName}</span></>)}
                               </div>
                             </div>
 
                             <div className="flex items-center gap-1">
                               {!n.read && (
-                                <Button variant="ghost" size="sm" onClick={() => markAsRead(n.id)}>
+                                <Button variant="ghost" size="sm" onClick={() => onMarkAsRead(n.id)} aria-label="읽음 처리">
                                   <CheckCircle2 className="h-4 w-4" />
                                 </Button>
                               )}
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => deleteNotification(n.id)}
+                                onClick={() => onDeleteLocal(n.id)}
                                 className="text-muted-foreground hover:text-destructive"
+                                aria-label="이 알림 숨기기"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

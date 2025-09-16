@@ -6,6 +6,7 @@ target/
 build/
 backend/target/
 backend/uploads/
+uploads/
 backend/build/
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -60,3 +61,7 @@ Thumbs.db
 
 # === Local secrets (반드시 ignore) ===
 backend/src/main/resources/application-local.properties
+
+# === Claude Code settings ===
+.claude/
+prompt.txt

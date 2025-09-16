@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿﻿import { useEffect, useMemo, useState } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
-  Search, Plus, FileText, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
+  Search, Plus, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
 import { listProjects, getProjectDetail } from "@/api/projects";
@@ -63,7 +63,11 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
   // 상세(열람) 모달
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
-  const closeDetail = () => setDetailProjectId(null);
+  const [detailIntent, setDetailIntent] = useState<{ tab?: string; edit?: boolean } | null>(null);
+  const closeDetail = () => { setDetailProjectId(null); setDetailIntent(null); };
+
+  // 타입 캐스팅(추가 prop 허용)
+  const PDP: any = ProjectDetailPanel;
 
   useEffect(() => {
     (async () => {
@@ -76,6 +80,19 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       }
     })();
   }, [isAdmin]);
+
+  /** 대시보드에서 `/projects?open=overview&edit=1&projectId=123` 로 들어온 경우 처리 */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get("open");
+    const edit = params.get("edit");
+    const pidStr = params.get("projectId");
+    const pid = pidStr ? Number(pidStr) : NaN;
+    if (open && Number.isFinite(pid) && pid > 0) {
+      setDetailProjectId(pid);
+      setDetailIntent({ tab: open, edit: edit === "1" || edit === "true" });
+    }
+  }, []);
 
   /** 탭/검색 2차 필터 + 최근 업데이트 정렬 */
   const filtered = useMemo(() => {
@@ -118,44 +135,70 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     }
   };
 
+  /** '보고서 작성' 퀵 액션 (관리자/교수 등에서 사용 가능) */
+  const quickWriteReport = (projectId: number) => {
+    setDetailProjectId(projectId);
+    setDetailIntent({ tab: "overview", edit: true });
+  };
+
   const renderActions = (p: ProjectListDto) => {
     if (userRole === "student") {
+      // 중복 기능 제거: 학생은 '열람'과 'GitHub'만 제공
       return (
         <div className="flex gap-2">
-          {/* ✅ 학생도 프로젝트 상세(개요서 포함) 열람 가능 */}
-          <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDetailProjectId(p.id)}
+            aria-label="프로젝트 열람"
+            title="프로젝트 열람"
+          >
             <Eye className="h-4 w-4 mr-1" />
             열람
           </Button>
-          <Button size="sm" variant="outline">
-            <FileText className="h-4 w-4 mr-1" />
-            보고서 작성
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openGithub(p.id)}
+            aria-label="GitHub 열기"
+            title="GitHub 열기"
+          >
             <GitBranch className="h-4 w-4 mr-1" />
             GitHub
           </Button>
-          {/* 학생도 피드백 열람/작성 허용하려면 아래 주석 해제
-          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
-            <MessageSquare className="h-4 w-4 mr-1" />
-            피드백
-          </Button>
-          */}
         </div>
       );
     }
     if (userRole === "professor") {
       return (
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDetailProjectId(p.id)}
+            aria-label="프로젝트 열람"
+            title="프로젝트 열람"
+          >
             <Eye className="h-4 w-4 mr-1" />
             열람
           </Button>
-          <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openGithub(p.id)}
+            aria-label="GitHub 열기"
+            title="GitHub 열기"
+          >
             <GitBranch className="h-4 w-4 mr-1" />
             GitHub
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setFeedbackProjectId(p.id)}
+            aria-label="피드백 열기"
+            title="피드백 열기"
+          >
             <MessageSquare className="h-4 w-4 mr-1" />
             피드백
           </Button>
@@ -165,19 +208,43 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     // admin
     return (
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" onClick={() => setDetailProjectId(p.id)}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setDetailProjectId(p.id)}
+          aria-label="프로젝트 열람"
+          title="프로젝트 열람"
+        >
           <Eye className="h-4 w-4 mr-1" />
           열람
         </Button>
-        <Button size="sm" variant="outline" onClick={() => openGithub(p.id)}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => openGithub(p.id)}
+          aria-label="GitHub 열기"
+          title="GitHub 열기"
+        >
           <GitBranch className="h-4 w-4 mr-1" />
           GitHub
         </Button>
-        <Button size="sm" variant="outline">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => quickWriteReport(p.id)}
+          aria-label="프로젝트 편집"
+          title="프로젝트 편집"
+        >
           <Edit className="h-4 w-4 mr-1" />
           편집
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setFeedbackProjectId(p.id)}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setFeedbackProjectId(p.id)}
+          aria-label="피드백 열기"
+          title="피드백 열기"
+        >
           <MessageSquare className="h-4 w-4 mr-1" />
           피드백
         </Button>
@@ -198,7 +265,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </p>
         </div>
         {userRole === "student" && (
-          <Button>
+          <Button aria-label="새 프로젝트 만들기" title="새 프로젝트 만들기">
             <Plus className="h-4 w-4 mr-2" />
             새 프로젝트
           </Button>
@@ -314,7 +381,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         </TabsContent>
       </Tabs>
 
-      {/* 피드백 모달 — 너비는 유지, 높이 제한 + 다이얼로그 자체 스크롤 */}
+      {/* 피드백 모달 */}
       <Dialog open={feedbackProjectId != null} onOpenChange={(o) => !o && closeFeedback()}>
         <DialogContent className="sm:max-w-2xl w-[92vw] max-h-[85vh] overflow-y-auto p-0">
           <DialogHeader className="sticky top-0 z-10 bg-background p-6 pb-4 border-b">
@@ -336,7 +403,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         </DialogContent>
       </Dialog>
 
-      {/* 상세(열람) 모달 — 다이얼로그 자체 스크롤 */}
+      {/* 상세(열람) 모달 */}
       <Dialog open={detailProjectId != null} onOpenChange={(o) => !o && closeDetail()}>
         <DialogContent
           style={{ maxWidth: "none", width: "96vw", maxHeight: "92vh" }}
@@ -350,7 +417,13 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
           </DialogHeader>
 
           <div className="p-6 pt-4">
-            {detailProjectId != null && <ProjectDetailPanel projectId={detailProjectId} />}
+            {detailProjectId != null && (
+              <PDP
+                projectId={detailProjectId}
+                initialTab={detailIntent?.tab}
+                forceEdit={detailIntent?.edit}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

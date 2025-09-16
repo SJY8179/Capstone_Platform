@@ -4,6 +4,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CalendarWidget } from "@/components/Dashboard/CalendarWidget";
 import { EventEditor } from "@/components/Schedule/EventEditor";
@@ -13,7 +15,7 @@ import {
 } from "lucide-react";
 import { getProjectDashboardSummary } from "@/api/dashboard";
 import { listProjectFeedback } from "@/api/feedback";
-import { listProjects } from "@/api/projects";
+import { listProjects, getProjectDetail, updateProjectRepo } from "@/api/projects";
 import { listTeams } from "@/api/teams";
 import { listSchedulesInRange, invalidateSchedulesCache } from "@/api/schedules";
 import type {
@@ -27,9 +29,10 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import ProjectDetailPanel from "@/components/Projects/ProjectDetailPanel";
+import { toast } from "sonner";
 
 /* ===== util ===== */
-/** 로컬 시간 기준 YYYY-MM-DD */
 const toYMD = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -42,10 +45,8 @@ const addDays = (d: Date, n: number) => {
 const formatDateK = (isoOrYmd?: string | null) =>
   isoOrYmd ? new Date(isoOrYmd).toLocaleDateString("ko-KR") : "N/A";
 
-/* 탭 타입 */
 type STab = "all" | "meeting" | "presentation" | "task" | "deadline";
 
-/* 아이콘/색상 헬퍼 */
 function TypeIcon({ type, className = "h-4 w-4" }: { type: ScheduleDto["type"]; className?: string; }) {
   switch (type) {
     case "deadline":
@@ -60,7 +61,6 @@ function TypeIcon({ type, className = "h-4 w-4" }: { type: ScheduleDto["type"]; 
   }
 }
 
-/* ===== rating parser / renderer ===== */
 function parseRating(content?: string | null): { rating: number | null; body: string } {
   const raw = content ?? "";
   const m = raw.match(/\[rating:(\d)\]/i);
@@ -80,14 +80,30 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-/* ===== component ===== */
 interface StudentDashboardProps {
   projectId?: number;
 }
 
-/** 서버 기본값이 3개이므로, '피드백 보기' 클릭 시 한 번 더 크게 가져온다 */
 const DEFAULT_FB_LIMIT = 3;
 const ALL_FB_LIMIT = 100;
+
+function parseGithubInput(text: string): { owner: string; name: string; url: string } | null {
+  if (!text) return null;
+  const t = text.trim().replace(/^git\+/, "").replace(/\.git$/, "");
+  const m1 = t.match(/github\.com[/:]([^/]+)\/([^/#?]+)/i);
+  if (m1?.[1] && m1?.[2]) {
+    const owner = m1[1];
+    const name = m1[2];
+    return { owner, name, url: `https://github.com/${owner}/${name}` };
+  }
+  const m2 = t.match(/^([^/\s]+)\/([^/#?\s]+)$/);
+  if (m2?.[1] && m2?.[2]) {
+    const owner = m2[1];
+    const name = m2[2];
+    return { owner, name, url: `https://github.com/${owner}/${name}` };
+  }
+  return null;
+}
 
 export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [project, setProject] = useState<ProjectListDto | null>(null);
@@ -95,13 +111,23 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [feedback, setFeedback] = useState<FeedbackDto[]>([]);
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
+  const [repoUrl, setRepoUrl] = useState<string | null>(null);
+
   const [tab, setTab] = useState<STab>("all");
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
 
-  // 🔹 피드백 조회 개수 상태
   const [fbLimit, setFbLimit] = useState<number>(DEFAULT_FB_LIMIT);
+
+  // GitHub 연결 다이얼로그
+  const [ghOpen, setGhOpen] = useState(false);
+  const [ghInput, setGhInput] = useState("");
+  const [ghSaving, setGhSaving] = useState(false);
+
+  // 프로젝트 상세(개요/편집) 다이얼로그
+  const [reportOpen, setReportOpen] = useState(false);
+  const PDP: any = ProjectDetailPanel;
 
   const refreshSchedules = useCallback(async () => {
     if (!projectId) {
@@ -136,15 +162,16 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
           setSummary(null);
           setFeedback([]);
           setSchedules([]);
+          setRepoUrl(null);
           return;
         }
 
-        const [projects, teams, summaryData, feedbackData] = await Promise.all([
+        const [projects, teams, summaryData, feedbackData, detail] = await Promise.all([
           listProjects(),
           listTeams(),
           getProjectDashboardSummary(projectId),
-          // 🔹 현재 limit 기준으로 피드백 조회 (서버 기본 3 → 버튼 후 100)
           listProjectFeedback(projectId, fbLimit),
+          getProjectDetail(projectId),
         ]);
 
         const currentProject =
@@ -161,6 +188,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
 
         setSummary(summaryData);
         setFeedback(feedbackData);
+        setRepoUrl(detail?.repo?.url ?? null);
 
         await refreshSchedules();
       } catch (e) {
@@ -169,9 +197,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         setLoading(false);
       }
     })();
-  }, [projectId, refreshSchedules, fbLimit]); // ← fbLimit 변경 시 재조회
+  }, [projectId, refreshSchedules, fbLimit]);
 
-  /* 다른 컴포넌트에서 일정이 변경되면 대시보드도 즉시 갱신 */
   useEffect(() => {
     const handler = async () => {
       if (!projectId) return;
@@ -182,13 +209,11 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
     let off: (() => void) | undefined;
 
     try {
-      // onChanged(handler) 형태 지원
       // @ts-ignore
       off = scheduleBus.onChanged?.(handler);
     } catch {}
 
     try {
-      // on("changed", handler) 형태 지원
       if (!off && typeof (scheduleBus as any).on === "function") {
         // @ts-ignore
         scheduleBus.on("changed", handler);
@@ -204,7 +229,6 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
     return () => { try { off?.(); } catch {} };
   }, [projectId, refreshSchedules]);
 
-  /* 카드 상단 요약 값 */
   const tasksTotal = useMemo(() => {
     if (!summary) return 0;
     const a = summary.assignments;
@@ -227,6 +251,51 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
       setEditorOpen(true);
     } else {
       setNeedProjectOpen(true);
+    }
+  };
+
+  /** 대시보드: 보고서 작성 → 같은 화면에서 상세 다이얼로그(개요/편집) */
+  const openReportEditor = () => {
+    if (!projectId) {
+      setNeedProjectOpen(true);
+      return;
+    }
+    setReportOpen(true);
+  };
+
+  /** 대시보드: GitHub 연동/이동 */
+  const clickGithub = () => {
+    if (!projectId) {
+      setNeedProjectOpen(true);
+      return;
+    }
+    if (repoUrl) {
+      window.open(repoUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setGhOpen(true);
+  };
+
+  /** GitHub 연동 저장 */
+  const saveGithub = async () => {
+    if (!projectId) return;
+    const parsed = parseGithubInput(ghInput);
+    if (!parsed) {
+      toast("형식이 올바르지 않습니다.", {
+        description: "owner/repo 또는 GitHub URL을 입력해 주세요.",
+      });
+      return;
+    }
+    setGhSaving(true);
+    try {
+      const detail = await updateProjectRepo(projectId, parsed.url);
+      setRepoUrl(detail?.repo?.url ?? parsed.url);
+      toast("GitHub 레포가 연결되었습니다.", { description: parsed.url });
+      setGhOpen(false);
+    } catch (e: any) {
+      toast("연동에 실패했습니다.", { description: e?.message ?? "잠시 후 다시 시도해 주세요." });
+    } finally {
+      setGhSaving(false);
     }
   };
 
@@ -273,8 +342,8 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
                 <GitBranch className="h-5 w-5 text-chart-3" />
               </div>
               <div>
-                <p className="text-2xl font-semibold">N/A</p>
-                <p className="text-sm text-muted-foreground">레포 상태</p>
+                <p className="text-2xl font-semibold">{repoUrl ? "연결됨" : "미연동"}</p>
+                <p className="text-sm text-muted-foreground">{repoUrl ? "GitHub 연결" : "연결되지 않음"}</p>
               </div>
             </div>
           </CardContent>
@@ -327,13 +396,13 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
             </div>
 
             <div className="flex gap-2">
-              <Button size="sm" className="flex-1">
+              <Button size="sm" className="flex-1" onClick={openReportEditor}>
                 <FileText className="h-4 w-4 mr-2" />
                 보고서 작성
               </Button>
-              <Button size="sm" variant="outline" className="flex-1">
+              <Button size="sm" variant="outline" className="flex-1" onClick={clickGithub}>
                 <GitBranch className="h-4 w-4 mr-2" />
-                GitHub 연동
+                {repoUrl ? "GitHub 열기" : "GitHub 연동"}
               </Button>
             </div>
           </CardContent>
@@ -439,7 +508,7 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (!isShowingAll) setFbLimit(ALL_FB_LIMIT); // 🔹 전체 로드로 전환
+                if (!isShowingAll) setFbLimit(ALL_FB_LIMIT);
                 document.getElementById("recent-feedback")?.scrollIntoView({ behavior: "smooth", block: "start" });
               }}
               title={isShowingAll ? "피드백 보기" : "피드백 전체 보기"}
@@ -499,13 +568,56 @@ export function StudentDashboard({ projectId }: StudentDashboardProps) {
         />
       )}
 
+      {/* GitHub 연동 다이얼로그 */}
+      <Dialog open={ghOpen} onOpenChange={setGhOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>GitHub 저장소 연동</DialogTitle>
+            <DialogDescription>owner/repo 또는 전체 URL을 입력하세요.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label htmlFor="gh-input">저장소</Label>
+            <Input
+              id="gh-input"
+              placeholder="예) acme/capstone 또는 https://github.com/acme/capstone"
+              value={ghInput}
+              onChange={(e) => setGhInput(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setGhOpen(false)} disabled={ghSaving}>취소</Button>
+              <Button onClick={saveGithub} disabled={ghSaving}>저장</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 프로젝트 상세(개요/편집) 다이얼로그 */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent
+          style={{ maxWidth: "none", width: "96vw", maxHeight: "92vh" }}
+          className="sm:max-w-none overflow-y-auto p-0"
+        >
+          <DialogHeader className="sticky top-0 z-10 bg-background p-6 pb-4 border-b">
+            <DialogTitle>프로젝트 개요/보고서</DialogTitle>
+            <DialogDescription className="sr-only">
+              프로젝트 개요 작성/수정
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 pt-4">
+            {!!projectId && (
+              <PDP projectId={projectId} initialTab="overview" forceEdit />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {!projectId && (
         <Dialog open={needProjectOpen} onOpenChange={setNeedProjectOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>프로젝트 참여가 필요합니다</DialogTitle>
               <DialogDescription>
-                일정을 추가하려면 먼저 프로젝트에 참여하거나 새 프로젝트를 생성하세요.
+                일정을 추가하거나 보고서를 작성하려면 먼저 프로젝트에 참여하거나 새 프로젝트를 생성하세요.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex gap-2 sm:justify-end">

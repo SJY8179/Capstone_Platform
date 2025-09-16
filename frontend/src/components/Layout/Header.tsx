@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { Search, User as UserIcon, LogOut, Settings as SettingsIcon } from "lucide-react";
 import {
   DropdownMenu,
@@ -13,7 +13,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { ProjectSwitcher } from "@/components/Projects/ProjectSwitcher";
 import { NotificationDropdown } from "../Notifications/NotificationDropdown";
-import type { Notification } from "../Notifications/NotificationCenter";
+import type { AppNotification as Notification } from "@/types/domain";
+import { fetchNotifications, markAllNotificationsAsRead, markNotificationAsRead } from "@/api/notifications";
+import { appBus } from "@/lib/app-bus";
 
 /* =========================================
  * Types
@@ -41,47 +43,12 @@ interface HeaderProps {
   activeProjectId?: number | null;
   onChangeActiveProject?: (id: number) => void;
 
-  /** 외부에서 알림을 제어하고 싶다면 전달(미전달 시 내부 데모 상태 사용) */
+  /** 외부에서 알림을 제어하고 싶다면 전달(미전달 시 내부 집계 사용) */
   notifications?: Notification[];
 
   /** 설정 페이지 열기 */
   onOpenSettings?: () => void;
 }
-
-/* =========================================
- * Demo notifications (내부 기본값)
- * =======================================*/
-const demoNotifications: Notification[] = [
-  {
-    id: "1",
-    type: "commit",
-    title: "새로운 커밋이 푸시되었습니다",
-    message: '김철수님이 "프론트엔드 로그인 기능 구현"을 커밋했습니다.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    read: false,
-    priority: "medium",
-    author: { name: "김철수" },
-  },
-  {
-    id: "2",
-    type: "feedback",
-    title: "새로운 피드백이 도착했습니다",
-    message: "박교수님이 중간 발표 자료에 피드백을 남겼습니다.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    read: false,
-    priority: "high",
-    author: { name: "박교수" },
-  },
-  {
-    id: "3",
-    type: "schedule",
-    title: "오늘 일정 알림",
-    message: "오후 2시: 팀 미팅, 오후 4시: 멘토링 세션이 예정되어 있습니다.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3),
-    read: true,
-    priority: "medium",
-  },
-];
 
 /* =========================================
  * Helpers
@@ -130,19 +97,27 @@ export function Header({
   notifications: externalNotifications,
   onOpenSettings,
 }: HeaderProps) {
-  // 알림: 외부 제어(notifications prop) 우선, 없으면 내부 상태 사용
+  // 알림: 외부 제어(notifications prop) 우선, 없으면 내부 집계 사용
   const [internalNotifications, setInternalNotifications] =
-    useState<Notification[]>(demoNotifications);
+    useState<Notification[]>([]);
   const notifications = externalNotifications ?? internalNotifications;
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications]
-  );
+  // 최초 로드 및 브로드캐스트 반영
+  useEffect(() => {
+    if (externalNotifications) return;
+    const load = async () => {
+      const list = await fetchNotifications();
+      setInternalNotifications(list);
+    };
+    load();
+    const off = appBus.onNotificationsChanged(() => load());
+    return () => { try { off?.(); } catch {} };
+  }, [externalNotifications]);
 
   const markAsRead = useCallback(
     (id: string) => {
-      if (externalNotifications) return; // 외부 제어 시 내부 업데이트 불필요
+      if (externalNotifications) return;
+      markNotificationAsRead(id);
       setInternalNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
@@ -152,8 +127,9 @@ export function Header({
 
   const markAllAsRead = useCallback(() => {
     if (externalNotifications) return;
+    markAllNotificationsAsRead(internalNotifications.map(n => n.id));
     setInternalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, [externalNotifications]);
+  }, [externalNotifications, internalNotifications]);
 
   const avatarSrc = resolveAvatarSrc(user);
 
@@ -207,9 +183,9 @@ export function Header({
 
         {/* 알림 드롭다운 */}
         <NotificationDropdown
-          notifications={notifications}
-          onMarkAsRead={markAsRead}
-          onMarkAllAsRead={markAllAsRead}
+          notifications={externalNotifications ? externalNotifications : internalNotifications}
+          onMarkAsRead={externalNotifications ? undefined : markAsRead}
+          onMarkAllAsRead={externalNotifications ? undefined : markAllAsRead}
           onNotificationClick={handleNotificationClick}
         />
 
