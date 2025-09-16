@@ -82,6 +82,7 @@ export function Sidebar({
     const admin = [
       ...common,
       { id: "users" as ActivePage, label: "사용자 관리", icon: UserCog },
+      { id: "teams" as ActivePage, label: "팀 관리", icon: Users },           // ⬅ 추가
       { id: "evaluation" as ActivePage, label: "평가 관리", icon: ClipboardCheck },
     ];
     switch (userRole) {
@@ -131,13 +132,13 @@ export function Sidebar({
           priority: mapPriority(s.priority),
         }))
         .sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")));
-        // ⬆ 전체를 보관: 렌더 단계에서 상위 3개만 보여주고 나머지 개수 표시
+      // ⬆ 전체를 보관: 렌더 단계에서 상위 3개만 보여주고 나머지 개수 표시
 
       setUpcoming(mapped);
     } catch (e: any) {
       if (e?.status === 403 || e?.response?.status === 403) {
         setUpcoming([]);
-    } else {
+      } else {
         console.debug("Failed to load upcoming schedules:", e);
         setUpcoming([]);
       }
@@ -162,8 +163,8 @@ export function Sidebar({
     const unsubNotif = appBus.onNotificationsChanged(() => reloadUnread());
 
     return () => {
-      try { unsubSchedule?.(); } catch {}
-      try { unsubNotif?.(); } catch {}
+      try { unsubSchedule?.(); } catch { }
+      try { unsubNotif?.(); } catch { }
     };
   }, [reloadUpcoming, reloadUnread, projectId]);
 
@@ -192,9 +193,8 @@ export function Sidebar({
 
   return (
     <aside
-      className={`${collapsed ? "w-16" : "w-64"} bg-sidebar border-r border-sidebar-border transition-all duration-300 relative ${
-        toggleDisabled ? "shadow-lg" : ""
-      }`}
+      className={`${collapsed ? "w-16" : "w-64"} bg-sidebar border-r border-sidebar-border transition-all duration-300 relative ${toggleDisabled ? "shadow-lg" : ""
+        }`}
       aria-label="사이드바"
     >
       {/* 접기/펼치기 토글 */}
@@ -203,16 +203,15 @@ export function Sidebar({
         size="sm"
         onClick={onToggleCollapse}
         disabled={toggleDisabled}
-        className={`absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-sidebar shadow-md hover:bg-sidebar-accent ${
-          toggleDisabled ? "opacity-50 cursor-not-allowed" : ""
-        }`}
+        className={`absolute -right-3 top-6 z-10 h-6 w-6 rounded-full border bg-sidebar shadow-md hover:bg-sidebar-accent ${toggleDisabled ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
         title={
           toggleDisabled
             ? "사이드바 동작이 설정에서 고정되었습니다"
             : collapsed
-            ? "사이드바 펼치기"
-            : "사이드바 접기"
+              ? "사이드바 펼치기"
+              : "사이드바 접기"
         }
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}

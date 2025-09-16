@@ -1,0 +1,51 @@
+### ========= 공통 =========
+@host = http://localhost:8080/api
+@ts = {{$timestamp}}
+@teamName = SMOKE-TEAM-ADMIN-{{ts}}
+@projTitle = SMOKE-PROF-ID-{{ts}}
+@profEmail = prof1@a.com
+
+### 1) 관리자 로그인
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "admin@a.com", "password": "111111" }
+> {%
+    let d=response.body; if(typeof d==='string'){try{d=JSON.parse(d)}catch(e){}}
+    client.global.set("adminToken", d.accessToken);
+%}
+
+### 2) 팀 생성
+POST {{host}}/teams
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "name": "{{teamName}}", "description": "admin smoke" }
+> {%
+    let d=response.body; if(typeof d==='string'){try{d=JSON.parse(d)}catch(e){}}
+    if(response.status>=400){throw new Error("팀 생성 실패: "+response.status+" "+response.body)}
+    client.global.set("teamId", String(d.id));
+%}
+
+### 3) 교수 ID 조회
+GET {{host}}/users?q={{profEmail}}&size=5
+Authorization: Bearer {{adminToken}}
+
+> {%
+  let a=response.body; if(typeof a==='string'){try{a=JSON.parse(a)}catch(e){}}
+  const list=Array.isArray(a)?a:(a?.items||a?.content||[]);
+  if(!list || !list.length){throw new Error("교수 검색 결과 없음: {{profEmail}}")}
+  const prof=list.find(u=>u.email && u.email.toLowerCase()==="{{profEmail}}".toLowerCase()) || list[0];
+  client.global.set("profId", String(prof.id));
+%}
+
+### 4) 프로젝트 생성 (professorId 명시 → 즉시 2xx 기대)
+POST {{host}}/projects
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "{{projTitle}}",
+  "teamId": {{teamId}},
+  "professorId": {{profId}}
+}
