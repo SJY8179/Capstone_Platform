@@ -109,6 +109,7 @@ export interface TeamListDto {
     avatar?: string;
     role: "leader" | "member";
     status: "active" | "inactive";
+    userRole: string; // STUDENT, TA, PROFESSOR, ADMIN
   }[];
   stats: {
     commits: number;

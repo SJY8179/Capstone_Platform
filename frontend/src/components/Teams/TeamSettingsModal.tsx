@@ -225,7 +225,7 @@ export function TeamSettingsModal({
                                         <Select value={selectedLeaderId} onValueChange={handleLeaderChange} disabled={isSubmitting}>
                                             <SelectTrigger id="leader-select"><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                {team.members.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
+                                                {team.members.filter(m => m.userRole !== 'TA').map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -291,13 +291,13 @@ export function TeamSettingsModal({
 
                                         <ScrollArea className="h-[200px] rounded-md border">
                                             <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-md p-2">
-                                                {team.members.filter(m => m.role !== 'leader').map(member => (
+                                                {team.members.filter(m => m.role !== 'leader' && m.userRole !== 'TA').map(member => (
                                                     <div key={member.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
                                                         <span>{member.name}</span>
                                                         <Button size="sm" variant="destructive" onClick={() => handleRemoveMember(member.id, member.name)} disabled={isSubmitting}>삭제</Button>
                                                     </div>
                                                 ))}
-                                                {team.members.length === 1 && <p className="text-sm text-muted-foreground p-2">팀원이 없습니다.</p>}
+                                                {team.members.filter(m => m.role !== 'leader' && m.userRole !== 'TA').length === 0 && <p className="text-sm text-muted-foreground p-2">팀원이 없습니다.</p>}
                                             </div>
                                         </ScrollArea>
                                     </div>
