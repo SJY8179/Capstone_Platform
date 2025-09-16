@@ -46,7 +46,10 @@ public class TeamService {
                 .toList();
     }
 
-    /** /api/teams/{teamId}/invitable-users **/
+    /** /api/teams/{teamId}/invitable-users
+     * 팀원 초대 가능 목록 - 교수와 TA는 제외 (학생과 관리자만 초대 가능)
+     * 교수는 별도의 "교수 추가" 기능을 통해서만 추가
+     **/
     public List<UserDto> findInvitableUsers(Long teamId) {
         Set<Long> memberIds = teamMemberRepository.findWithUserByTeamId(teamId).stream()
                 .map(tm -> tm.getUser().getId())
@@ -54,6 +57,7 @@ public class TeamService {
 
         return userRepository.findAll().stream()
                 .filter(user -> !memberIds.contains(user.getId()))
+                .filter(user -> user.getRole() != Role.PROFESSOR && user.getRole() != Role.TA)
                 .map(user -> new UserDto(user.getId(), user.getName(), user.getEmail()))
                 .toList();
     }
