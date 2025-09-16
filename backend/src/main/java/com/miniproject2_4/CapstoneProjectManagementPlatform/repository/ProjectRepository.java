@@ -104,4 +104,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     /** 추가: 활성(archived=false) 프로젝트 수 */
     long countByProfessor_Id(Long userId);
+
+    /** 프로젝트 타이틀 중복 확인 (활성 프로젝트만) */
+    boolean existsByTitleAndArchivedFalse(String title);
 }

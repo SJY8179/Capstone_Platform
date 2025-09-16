@@ -64,6 +64,11 @@ public class ProjectService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "선택한 팀의 멤버가 아닙니다.");
         }
 
+        // 프로젝트 타이틀 중복 체크
+        if (projectRepository.existsByTitleAndArchivedFalse(request.getTitle())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미 존재하는 프로젝트 이름입니다: " + request.getTitle());
+        }
+
         // 3) 담당 교수 결정
         UserAccount professor = resolveProfessorForTeam(team, request.getProfessorId());
         if (professor == null) {
