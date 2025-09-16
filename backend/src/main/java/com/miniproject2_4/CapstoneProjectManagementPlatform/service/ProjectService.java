@@ -27,6 +27,7 @@ public class ProjectService {
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final EventService eventService;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -85,6 +86,10 @@ public class ProjectService {
                 .build();
 
         project = projectRepository.save(project);
+
+        // 시스템 활동 로깅
+        eventService.logSystemActivity("프로젝트 생성: " + project.getTitle() + " (생성자: " + creator.getName() + ")", project.getId());
+
         return toListDto(project);
     }
 
@@ -417,6 +422,10 @@ public class ProjectService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
         checkArchivePermission(project, actor);
         if (Boolean.TRUE.equals(project.getArchived())) return;
+
+        // 시스템 활동 로깅 (아카이브 전에 로깅)
+        eventService.logSystemActivity("프로젝트 아카이브: " + project.getTitle() + " (처리자: " + actor.getName() + ")", project.getId());
+
         project.setArchived(true);
         projectRepository.save(project);
     }
@@ -430,6 +439,10 @@ public class ProjectService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트가 존재하지 않습니다."));
         checkArchivePermission(project, actor);
         if (!Boolean.TRUE.equals(project.getArchived())) return;
+
+        // 시스템 활동 로깅 (복원 전에 로깅)
+        eventService.logSystemActivity("프로젝트 복원: " + project.getTitle() + " (처리자: " + actor.getName() + ")", project.getId());
+
         project.setArchived(false);
         projectRepository.save(project);
     }
@@ -445,6 +458,10 @@ public class ProjectService {
         if (!Boolean.TRUE.equals(project.getArchived())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아카이브된 프로젝트만 영구 삭제할 수 있습니다.");
         }
+
+        // 시스템 활동 로깅 (영구 삭제 전에 로깅)
+        eventService.logSystemActivity("프로젝트 영구 삭제: " + project.getTitle() + " (처리자: " + actor.getName() + ")", project.getId());
+
         projectRepository.delete(project);
     }
 

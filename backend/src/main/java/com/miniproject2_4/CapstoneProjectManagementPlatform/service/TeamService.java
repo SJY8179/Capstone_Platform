@@ -24,6 +24,7 @@ public class TeamService {
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final EventService eventService;
 
     /** (관리자) 전체 팀: /api/teams */
     public List<TeamListDto.Response> listTeams() {
@@ -104,7 +105,10 @@ public class TeamService {
 
         // 3) 자동 프로젝트 생성 제거 (중요!)
 
-        // 4) 응답 매핑
+        // 4) 시스템 활동 로깅
+        eventService.logSystemActivity("팀 생성: " + newTeam.getName() + " (생성자: " + creator.getName() + ")", null);
+
+        // 5) 응답 매핑
         return convertToDto(newTeam);
     }
 
@@ -175,6 +179,13 @@ public class TeamService {
         if (resolveProjectForTeam(teamId) != null) {
             throw new IllegalStateException("프로젝트에 할당된 팀은 삭제할 수 없습니다.");
         }
+
+        Team team = findTeamById(teamId);
+        UserAccount requester = findUserById(requesterId);
+
+        // 시스템 활동 로깅 (삭제 전에 로깅)
+        eventService.logSystemActivity("팀 삭제: " + team.getName() + " (삭제자: " + requester.getName() + ")", null);
+
         teamMemberRepository.deleteByTeamId(teamId);
         teamRepository.deleteById(teamId);
     }

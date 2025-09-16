@@ -84,6 +84,24 @@ public class EventService {
         eventRepository.delete(e);
     }
 
+    /**
+     * 시스템 활동 로깅 (팀/프로젝트 생성/삭제 등)
+     */
+    @Transactional
+    public void logSystemActivity(String title, Long projectId) {
+        Event e = new Event();
+        e.setTitle(title);
+        e.setStartAt(LocalDateTime.now());
+        e.setType(EventType.SYSTEM_ACTION);
+
+        if (projectId != null) {
+            Project project = projectRepository.findById(projectId).orElse(null);
+            e.setProject(project);
+        }
+
+        eventRepository.save(e);
+    }
+
     /** "yyyy-MM-ddTHH:mm:ss" | Offset | Instant | "yyyy-MM-dd" 지원 */
     private static LocalDateTime parseDateTime(String v) {
         if (v == null || v.isBlank()) return null;

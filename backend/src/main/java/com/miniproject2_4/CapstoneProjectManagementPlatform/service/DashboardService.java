@@ -245,7 +245,7 @@ public class DashboardService {
 
     public List<ActivityItem> getRecentActivities(int limit) {
         int size = Math.max(1, Math.min(limit, 100));
-        var events = eventRepository.findByProject_ArchivedFalseOrderByStartAtDesc(PageRequest.of(0, size));
+        var events = eventRepository.findAllActivitiesOrderByStartAtDesc(PageRequest.of(0, size));
         return events.stream().map(e -> new ActivityItem(
                 e.getId(),
                 e.getTitle(),
