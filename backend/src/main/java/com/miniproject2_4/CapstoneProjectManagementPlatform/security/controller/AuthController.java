@@ -1,11 +1,16 @@
 package com.miniproject2_4.CapstoneProjectManagementPlatform.security.controller;
 
+import com.miniproject2_4.CapstoneProjectManagementPlatform.dto.PasswordResetDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.AuthSession;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.Role;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.UserAccount;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.AuthSessionRepository;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.UserRepository;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.security.JwtUtil;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.service.PasswordResetService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -21,22 +26,14 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
     private final UserRepository userRepository;
     private final AuthSessionRepository authSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-
-    public AuthController(UserRepository userRepository,
-                          AuthSessionRepository authSessionRepository,
-                          PasswordEncoder passwordEncoder,
-                          JwtUtil jwtUtil) {
-        this.userRepository = userRepository;
-        this.authSessionRepository = authSessionRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtUtil = jwtUtil;
-    }
+    private final PasswordResetService passwordResetService;
 
     public record RegisterReq(String name, String email, String password, String role) {}
     public record LoginReq(String email, String password) {}
@@ -143,6 +140,91 @@ public class AuthController {
         body.put("role", ua.getRole() == null ? "student" : ua.getRole().name().toLowerCase());
 
         return ResponseEntity.ok(body);
+    }
+
+    @PostMapping("/forgot-id")
+    public ResponseEntity<PasswordResetDto.SuccessResponse> forgotId(
+            @Valid @RequestBody PasswordResetDto.ForgotIdRequest request) {
+
+        passwordResetService.sendForgotId(request.email());
+
+        return ResponseEntity.ok(new PasswordResetDto.SuccessResponse(
+                "요청이 처리되었습니다. 가입된 이메일인 경우 아이디 정보가 발송됩니다."
+        ));
+    }
+
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<PasswordResetDto.SuccessResponse> requestPasswordReset(
+            @Valid @RequestBody PasswordResetDto.PasswordResetRequest request,
+            HttpServletRequest httpRequest) {
+
+        String clientIp = getClientIpAddress(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        passwordResetService.createAndSendResetToken(request.emailOrUsername(), clientIp, userAgent);
+
+        return ResponseEntity.ok(new PasswordResetDto.SuccessResponse(
+                "요청이 처리되었습니다. 가입된 계정인 경우 비밀번호 재설정 링크가 발송됩니다."
+        ));
+    }
+
+    @GetMapping("/password-reset/validate")
+    public ResponseEntity<PasswordResetDto.TokenValidationResponse> validateResetToken(
+            @RequestParam String token) {
+
+        boolean isValid = passwordResetService.validateToken(token);
+
+        if (isValid) {
+            return ResponseEntity.ok(new PasswordResetDto.TokenValidationResponse(
+                    true, "유효한 토큰입니다."
+            ));
+        } else {
+            return ResponseEntity.badRequest().body(new PasswordResetDto.TokenValidationResponse(
+                    false, "유효하지 않거나 만료된 토큰입니다."
+            ));
+        }
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(
+            @Valid @RequestBody PasswordResetDto.PasswordResetConfirm request) {
+
+        try {
+            passwordResetService.confirmPasswordReset(request.token(), request.newPassword());
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(BAD_REQUEST, e.getMessage());
+        }
+    }
+
+    private String getClientIpAddress(HttpServletRequest request) {
+        String[] headers = {
+                "X-Forwarded-For",
+                "X-Real-IP",
+                "Proxy-Client-IP",
+                "WL-Proxy-Client-IP",
+                "HTTP_X_FORWARDED_FOR",
+                "HTTP_X_FORWARDED",
+                "HTTP_X_CLUSTER_CLIENT_IP",
+                "HTTP_CLIENT_IP",
+                "HTTP_FORWARDED_FOR",
+                "HTTP_FORWARDED",
+                "HTTP_VIA",
+                "REMOTE_ADDR"
+        };
+
+        for (String header : headers) {
+            String ip = request.getHeader(header);
+            if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+                // X-Forwarded-For can contain multiple IPs, get the first one
+                if (ip.contains(",")) {
+                    ip = ip.split(",")[0].trim();
+                }
+                return ip;
+            }
+        }
+
+        return request.getRemoteAddr();
     }
 
     private String generateRefreshToken() {

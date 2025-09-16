@@ -1,4 +1,4 @@
-﻿﻿import { http } from "@/api/http";
+import { http } from "@/api/http";
 import type { ProjectListDto, ProjectStatus, ProjectDetailDto, CreateProjectRequest } from "@/types/domain";
 
 /** 상태 문자열을 우리 타입으로 통일 */
@@ -349,6 +349,7 @@ export async function updateProjectRepo(
   return normalizeProjectDetail(data);
 }
 
+<<<<<<< HEAD
 /** GitHub URL 조립 */
 export const buildGithubUrl = (owner?: string | null, name?: string | null) =>
   owner && name ? `https://github.com/${owner}/${name}` : null;
@@ -372,6 +373,8 @@ export function parseGithubInput(text: string): { owner: string; name: string; u
   return null;
 }
 
+=======
+>>>>>>> feat/project-create-from-merge
 /** Archive project (soft delete) */
 export async function archiveProject(projectId: number): Promise<void> {
   await http.delete(`/projects/${projectId}`);
@@ -392,4 +395,8 @@ export async function listArchivedProjects(): Promise<ProjectListDto[]> {
   const { data } = await http.get("/projects?status=archived");
   const rows = normalizeListPayload(data);
   return rows.map((r: any) => normalizeProject(r)).filter((p) => Number.isFinite(p.id));
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> feat/project-create-from-merge

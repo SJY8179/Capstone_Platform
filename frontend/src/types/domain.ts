@@ -1,6 +1,13 @@
 /** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
+/** 새 프로젝트 생성 요청 DTO */
+export interface CreateProjectRequest {
+  title: string;
+  description?: string;
+  teamId: number; // 기존 팀 선택 (필수)
+}
+
 export interface ProjectListDto {
   id: number;
   name: string;
