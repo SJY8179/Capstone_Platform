@@ -148,14 +148,13 @@ export async function fetchNotifications(opts: FetchOpts = {}): Promise<AppNotif
                 })
             );
             return batches.flat();
-        })(), // 이 async 함수를 즉시 실행하여 Promise로 만듭니다.
+        })(),
 
-        // --- Promise 2: ✅ 새로 추가된 팀 기반 알림 조회 로직 ---
         http.get<AppNotification[]>('/notifications')
             .then(response => response.data ?? [])
             .catch(error => {
                 console.error("팀 관련 알림을 가져오는 데 실패했습니다:", error);
-                return []; // 에러가 발생해도 전체 기능이 멈추지 않도록 빈 배열 반환
+                return [];
             })
     ]);
     const allNotifications = [...projectBasedNotifications, ...teamBasedNotifications];

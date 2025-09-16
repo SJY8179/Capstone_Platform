@@ -24,10 +24,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Crown } from 'lucide-react';
+import { Crown, UserPlus } from 'lucide-react';
 import { toast } from "sonner";
 import {
-    updateTeam, changeLeader, removeMember, deleteTeam
+    updateTeam, changeLeader, removeMember, deleteTeam,
+    getAllProfessors, addProfessorToTeam
 } from '@/api/teams';
 import type { TeamListDto } from '@/types/domain';
 import { SidebarNav } from '@/components/Teams/SidebarNav';
@@ -56,6 +57,10 @@ export function TeamSettingsModal({
     const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
     const [confirmDeleteText, setConfirmDeleteText] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [professors, setProfessors] = useState<Array<{ id: number; name: string; email: string }>>([]);
+    const [selectedProfessorId, setSelectedProfessorId] = useState<string>('');
+    const [isAddingProfessor, setIsAddingProfessor] = useState(false);
+
     const [activeView, setActiveView] = useState('info');
 
     useEffect(() => {
@@ -67,9 +72,32 @@ export function TeamSettingsModal({
                 setSelectedLeaderId(String(leader.id));
             }
             setConfirmDeleteText('');
+            setSelectedProfessorId('');
+            setIsAddingProfessor(false);
             setActiveView('info');
         }
     }, [team, isOpen]);
+
+    // 교수 목록 로드
+    useEffect(() => {
+        if (isOpen && activeView === 'members') {
+            loadProfessors();
+        }
+    }, [isOpen, activeView]);
+
+    const loadProfessors = async () => {
+        try {
+            const professorList = await getAllProfessors();
+            // 이미 팀에 있는 교수는 제외
+            const teamProfessorIds = team?.members
+                .filter(m => professorList.some(p => p.id === m.id))
+                .map(m => m.id) || [];
+            const availableProfessors = professorList.filter(p => !teamProfessorIds.includes(p.id));
+            setProfessors(availableProfessors);
+        } catch (error) {
+            console.error('Failed to load professors:', error);
+        }
+    };
 
     if (!team) return null;
 
@@ -136,6 +164,27 @@ export function TeamSettingsModal({
         }
     };
 
+    const handleAddProfessor = async () => {
+        if (!selectedProfessorId) {
+            alert('교수를 선택해주세요.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await addProfessorToTeam(team.id, Number(selectedProfessorId));
+            alert('교수가 팀에 추가되었습니다.');
+            setSelectedProfessorId('');
+            setIsAddingProfessor(false);
+            handlers.onRefreshNeeded();
+            onClose();
+        } catch (error) {
+            alert(`교수 추가에 실패했습니다: ${error instanceof Error ? error.message : ''}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-xl h-[70vh] flex flex-col p-0">
@@ -173,7 +222,7 @@ export function TeamSettingsModal({
                             </Card>
                         )}
 
-                        {/* 팀원 관리 탭 */}
+                        {/* 2. 팀원 관리 탭 */}
                         {activeView === 'members' && (
                             <Card className="border-none shadow-none">
                                 <CardContent className="pt-6 space-y-6">
@@ -186,8 +235,66 @@ export function TeamSettingsModal({
                                             </SelectContent>
                                         </Select>
                                     </div>
+
                                     <div className="space-y-2">
-                                        <Label>팀원 목록</Label>
+                                        <div className="flex items-center justify-between">
+                                            <Label>팀원 목록</Label>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => setIsAddingProfessor(!isAddingProfessor)}
+                                                disabled={isSubmitting}
+                                            >
+                                                <UserPlus className="w-4 h-4 mr-1" />
+                                                교수 추가
+                                            </Button>
+                                        </div>
+
+                                        {isAddingProfessor && (
+                                            <div className="flex gap-2 p-3 border rounded-md bg-muted/20">
+                                                <Select
+                                                    value={selectedProfessorId}
+                                                    onValueChange={setSelectedProfessorId}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <SelectTrigger className="flex-1">
+                                                        <SelectValue placeholder="교수를 선택하세요" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {professors.length === 0 ? (
+                                                            <div className="p-2 text-sm text-muted-foreground">
+                                                                추가 가능한 교수가 없습니다
+                                                            </div>
+                                                        ) : (
+                                                            professors.map(prof => (
+                                                                <SelectItem key={prof.id} value={String(prof.id)}>
+                                                                    {prof.name} ({prof.email})
+                                                                </SelectItem>
+                                                            ))
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={handleAddProfessor}
+                                                    disabled={!selectedProfessorId || isSubmitting}
+                                                >
+                                                    추가
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setIsAddingProfessor(false);
+                                                        setSelectedProfessorId('');
+                                                    }}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    취소
+                                                </Button>
+                                            </div>
+                                        )}
+
                                         <ScrollArea className="h-[200px] rounded-md border">
                                             <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-md p-2">
                                                 {team.members.filter(m => m.role !== 'leader').map(member => (
@@ -203,6 +310,7 @@ export function TeamSettingsModal({
                                 </CardContent>
                             </Card>
                         )}
+
 
                         {/* 팀 삭제 탭 */}
                         {activeView === 'danger' && (
@@ -238,6 +346,6 @@ export function TeamSettingsModal({
                     </main>
                 </div>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 }

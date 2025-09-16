@@ -83,25 +83,25 @@ function normalizeProject(raw: any): ProjectListDto {
   const teamName =
     asString(
       raw?.team ??
-        raw?.teamName ??
-        raw?.teamTitle ??
-        raw?.teamDto?.name ??
-        raw?.team?.name ??
-        raw?.team?.title ??
-        raw?.teamInfo?.name ??
-        raw?.teamInfo?.title ??
-        ""
+      raw?.teamName ??
+      raw?.teamTitle ??
+      raw?.teamDto?.name ??
+      raw?.team?.name ??
+      raw?.team?.title ??
+      raw?.teamInfo?.name ??
+      raw?.teamInfo?.title ??
+      ""
     ) || "N/A";
 
   const lastUpdate =
     asString(
       raw?.lastUpdate ??
-        raw?.updatedAt ??
-        raw?.lastUpdatedAt ??
-        raw?.modifiedAt ??
-        raw?.recentUpdate ??
-        raw?.lastActivity ??
-        ""
+      raw?.updatedAt ??
+      raw?.lastUpdatedAt ??
+      raw?.modifiedAt ??
+      raw?.recentUpdate ??
+      raw?.lastActivity ??
+      ""
     ) || "";
 
   // 마일스톤
@@ -118,29 +118,29 @@ function normalizeProject(raw: any): ProjectListDto {
     msCompleted =
       asNumber(
         raw?.milestonesCompleted ??
-          raw?.milestoneCompleted ??
-          raw?.milestoneCountCompleted ??
-          raw?.milestone?.completed ??
-          0
+        raw?.milestoneCompleted ??
+        raw?.milestoneCountCompleted ??
+        raw?.milestone?.completed ??
+        0
       ) || 0;
     msTotal =
       asNumber(
         raw?.milestonesTotal ??
-          raw?.milestoneTotal ??
-          raw?.milestoneCountTotal ??
-          raw?.milestone?.total ??
-          0
+        raw?.milestoneTotal ??
+        raw?.milestoneCountTotal ??
+        raw?.milestone?.total ??
+        0
       ) || 0;
   }
 
   // 진행률(없으면 마일스톤 기반 계산)
   let progress = asNumber(
     raw?.progressPct ??
-      raw?.progress ??
-      raw?.completionRate ??
-      raw?.percent ??
-      raw?.completedPercent ??
-      0
+    raw?.progress ??
+    raw?.completionRate ??
+    raw?.percent ??
+    raw?.completedPercent ??
+    0
   );
   if (!Number.isFinite(progress) || progress <= 0) {
     progress = msTotal > 0 ? Math.round((msCompleted / msTotal) * 100) : 0;
@@ -185,10 +185,10 @@ function normalizeProjectDetail(raw: any): ProjectDetailDto {
     },
     professor: raw?.professor
       ? {
-          id: asNumber(raw.professor.id),
-          name: asString(raw.professor.name),
-          email: asString(raw.professor.email),
-        }
+        id: asNumber(raw.professor.id),
+        name: asString(raw.professor.name),
+        email: asString(raw.professor.email),
+      }
       : null,
     repo,
     createdAt: raw?.createdAt ?? null,
@@ -202,21 +202,21 @@ function normalizeProjectDetail(raw: any): ProjectDetailDto {
     },
     tasks: Array.isArray(raw?.tasks)
       ? raw.tasks.map((t: any) => ({
-          id: asNumber(t?.id),
-          title: asString(t?.title),
-          status: (t?.status as "completed" | "ongoing" | "pending") ?? "pending",
-          dueDate: t?.dueDate ?? null,
-        }))
+        id: asNumber(t?.id),
+        title: asString(t?.title),
+        status: (t?.status as "completed" | "ongoing" | "pending") ?? "pending",
+        dueDate: t?.dueDate ?? null,
+      }))
       : [],
     upcomingEvents: Array.isArray(raw?.upcomingEvents)
       ? raw.upcomingEvents.map((e: any) => ({
-          id: asNumber(e?.id),
-          title: asString(e?.title),
-          type: asString(e?.type ?? "ETC") as any,
-          startAt: e?.startAt ?? null,
-          endAt: e?.endAt ?? null,
-          location: e?.location ?? null,
-        }))
+        id: asNumber(e?.id),
+        title: asString(e?.title),
+        type: asString(e?.type ?? "ETC") as any,
+        startAt: e?.startAt ?? null,
+        endAt: e?.endAt ?? null,
+        location: e?.location ?? null,
+      }))
       : [],
     links: Array.isArray(raw?.links)
       ? raw.links.map((l: any) => ({ label: asString(l?.label), url: asString(l?.url) }))
@@ -329,9 +329,13 @@ export async function listProjects(opts?: { isAdmin?: boolean }): Promise<Projec
 }
 
 /** 새 프로젝트 생성 */
-export async function createProject(request: CreateProjectRequest): Promise<ProjectListDto> {
-  const { data } = await http.post("/projects", request);
-  return normalizeProject(data);
+export async function createProject(body: {
+  title: string;
+  teamId: number;
+  professorId?: number;
+}) {
+  const { data } = await http.post<ProjectListDto>("/projects", body);
+  return data;
 }
 
 /** 프로젝트 상세 */

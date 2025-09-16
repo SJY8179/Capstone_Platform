@@ -12,7 +12,7 @@ import {
 import { toast } from "sonner";
 import { UserRole, listInvitableUsers } from "@/types/user";
 import {
-  listTeams, listTeamsByProfessor,
+  listTeams, listAllTeams,
   sendTeamAnnouncement
 } from "@/api/teams";
 import type { TeamListDto, UserDto } from "@/types/domain";
@@ -73,12 +73,16 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     try {
       setLoading(true);
       let data: TeamListDto[] = [];
-
       if (userRole === "professor") {
-        data = await listTeamsByProfessor();
-      } else {
         data = await listTeams();
+      } else if (userRole === "student") {
+        data = await listTeams();
+      } else if (userRole === "ta") {
+        data = [];
+      } else {
+        data = await listAllTeams();
       }
+
       setTeams(data ?? []);
     } catch (error) {
       console.error("팀 목록을 불러오는 데 실패했습니다:", error);
@@ -298,6 +302,7 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
         )}
       </div>
 
+      {/* 모달들 */}
       <CreateTeamModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}

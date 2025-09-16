@@ -5,7 +5,7 @@ type Decision = {
 export default function DecisionsTab({ decisions }: { decisions: Decision[] }) {
   return (
     <div className="space-y-2">
-      {decisions.length === 0 && <p className="text-sm text-muted-foreground">등록된 결정이 없습니다.</p>}
+      {decisions.length === 0 && <p className="text-sm text-muted-foreground">등록된 의견이 없습니다.</p>}
       {decisions.map((d) => (
         <div key={d.id} className="text-sm flex items-center justify-between">
           <div className="truncate">{d.title}</div>

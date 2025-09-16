@@ -110,7 +110,7 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
 
   useEffect(() => {
     if (!user) {
-      me().catch(() => { });
+      me().catch(() => {});
     }
   }, [user, me]);
 
@@ -262,7 +262,7 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
           <TabsTrigger value="overview">개요서</TabsTrigger>
           <TabsTrigger value="work">작업</TabsTrigger>
           <TabsTrigger value="risks">리스크</TabsTrigger>
-          <TabsTrigger value="decisions">결정</TabsTrigger>
+          <TabsTrigger value="decisions">의견</TabsTrigger>
           <TabsTrigger value="files">파일</TabsTrigger>
         </TabsList>
 
@@ -681,24 +681,23 @@ const FilesSection = memo(function FilesSection({
 
   const [busy, setBusy] = useState(false);
 
-  // 외부 링크/상대경로 정규화: 스킴 없으면 https:// 붙이고,
-  // //example.com 은 https:로, /api/... 같은 내부 경로는 그대로 둔다.
+  // 외부 링크/상대경로 정규화
   const normalizeExternalUrl = (u: string) => {
     const raw = (u || "").trim();
     if (!raw) return "";
-    if (raw.startsWith("/")) return raw; // 내부 경로는 그대로
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return raw; // 스킴 존재
+    if (raw.startsWith("/")) return raw;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return raw;
     if (raw.startsWith("//")) return "https:" + raw;
     return "https://" + raw;
   };
 
-  // 프론트 유효성 검사: 내부경로 허용, 그 외 http/https + host 필수
+  // 프론트 유효성 검사
   const validateExternalUrl = (value: string): string | null => {
     const v = (value || "").trim();
     if (!v) return "URL을 입력하세요.";
     if (/\s/.test(v)) return "URL에 공백이 포함될 수 없습니다.";
 
-    if (v.startsWith("/")) return null; // 내부 경로는 통과
+    if (v.startsWith("/")) return null;
 
     const normalized = normalizeExternalUrl(v);
     try {
@@ -769,7 +768,6 @@ const FilesSection = memo(function FilesSection({
       setUrlError(null);
       setType("OTHER");
     } catch (e: any) {
-      // 백엔드 검증 실패 등
       alert(e?.message ?? "링크를 추가하지 못했습니다. URL을 확인해 주세요.");
     } finally {
       setBusy(false);
@@ -1000,8 +998,8 @@ const RisksSection = memo(function RisksSection({
       r.status === "OPEN"
         ? "MITIGATING"
         : r.status === "MITIGATING"
-          ? "CLOSED"
-          : "OPEN";
+        ? "CLOSED"
+        : "OPEN";
     const prev = risks;
     setRisks((p) => p.map((x) => (x.id === r.id ? { ...x, status: next } : x)));
     try {
@@ -1109,8 +1107,8 @@ const RisksSection = memo(function RisksSection({
                     r.status === "CLOSED"
                       ? "outline"
                       : r.status === "MITIGATING"
-                        ? "secondary"
-                        : "default"
+                      ? "secondary"
+                      : "default"
                   }
                 >
                   {r.status}
@@ -1140,7 +1138,7 @@ const RisksSection = memo(function RisksSection({
   );
 });
 
-/** 결정(ADR) */
+/** 의견(ADR 기반 데이터 사용) */
 const DecisionsSection = memo(function DecisionsSection({
   projectId,
   decisions,
@@ -1222,12 +1220,12 @@ const DecisionsSection = memo(function DecisionsSection({
               onChange={(e) => setDraft((s) => ({ ...s, options: e.target.value }))}
             />
             <Input
-              placeholder="최종 결정"
+              placeholder="의견 요지"
               value={draft.decision}
               onChange={(e) => setDraft((s) => ({ ...s, decision: e.target.value }))}
             />
             <Input
-              placeholder="결정으로 인한 영향"
+              placeholder="의견으로 인한 영향"
               value={draft.consequences}
               onChange={(e) =>
                 setDraft((s) => ({ ...s, consequences: e.target.value }))
@@ -1235,7 +1233,7 @@ const DecisionsSection = memo(function DecisionsSection({
             />
             <div className="flex justify-end">
               <Button onClick={onCreate} disabled={busy}>
-                결정 추가
+                의견 추가
               </Button>
             </div>
           </div>
@@ -1244,7 +1242,7 @@ const DecisionsSection = memo(function DecisionsSection({
 
       <div className="space-y-2">
         {decisions.length === 0 && (
-          <p className="text-sm text-muted-foreground">등록된 결정이 없습니다.</p>
+          <p className="text-sm text-muted-foreground">등록된 의견이 없습니다.</p>
         )}
         {decisions.map((d) => (
           <Card key={d.id}>
@@ -1271,7 +1269,7 @@ const DecisionsSection = memo(function DecisionsSection({
                     }}
                     disabled={busy}
                   >
-                    확정 시간 갱신
+                    기록 시간 갱신
                   </Button>
                   <Button
                     size="sm"
@@ -1295,7 +1293,7 @@ const DecisionsSection = memo(function DecisionsSection({
                 onSave={(v) => onSaveOne(d.id, { options: v })}
               />
               <EditableRow
-                label="결정"
+                label="의견"
                 value={d.decision}
                 onSave={(v) => onSaveOne(d.id, { decision: v })}
               />

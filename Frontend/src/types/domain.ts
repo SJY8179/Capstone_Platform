@@ -67,8 +67,8 @@ export interface RiskDto {
   id: number;
   projectId: number;
   title: string;
-  impact: 1 | 2 | 3 | 4 | 5;
-  likelihood: 1 | 2 | 3 | 4 | 5;
+  impact: 1|2|3|4|5;
+  likelihood: 1|2|3|4|5;
   mitigation?: string | null;
   owner?: string | null;
   dueDate?: string | null;
@@ -95,6 +95,7 @@ export interface CursorPage<T> {
   nextCursor: number | null;
 }
 
+/** ------------- Teams --------------- */
 /** ------------- Teams --------------- */
 export interface TeamListDto {
   id: number;
@@ -138,7 +139,7 @@ export interface TeamInvitation {
   team: TeamReference;
   invitee: Person;
   status: RequestStatus;
-  createdAt: string;
+  createdAt: string | null;
 }
 
 /** ✅ 공용 사용자 DTO (Invite 모달 등에서 사용) */
@@ -149,28 +150,6 @@ export interface UserDto {
   avatar?: string | null;
   avatarUrl?: string | null;
   invitationStatus?: 'PENDING' | 'NONE';
-}
-
-/** ------------- Notification --------------- */
-
-export interface Notification {
-  id: string;
-  type: 'commit' | 'feedback' | 'schedule' | 'team' | 'assignment' | 'system' | 'team_announcement';
-  title: string;
-  message: string;
-  timestamp: string; // API는 보통 string으로 날짜를 보내므로 Date 대신 string으로 받음
-  read: boolean;
-  priority: 'low' | 'medium' | 'high';
-  relatedInfo?: {
-    invitationId?: number;
-    teamName?: string;
-    teamId?: number;
-    announcementTitle?: string;
-  } | null;
-  author?: {
-    name: string;
-    avatar?: string;
-  };
 }
 
 /** 피드백 (서버 정식 DTO와 1:1) */
@@ -203,6 +182,47 @@ export interface DashboardStatus {
 export interface DeadlineItem {
   title: string;
   dueDate: string; // ISO
+}
+
+/** 관리자 대시보드 */
+export interface AdminSummary {
+  totalUsers: number;
+  activeCourses: number;
+  activeProjects: number;
+  uptimePct: number;
+}
+
+/** 관리자 사용자 관리 - 목록 아이템 */
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: "STUDENT" | "PROFESSOR" | "ADMIN" | "TA";
+  avatarUrl?: string | null;
+  createdAt?: string | null;
+  lastLoginAt?: string | null;
+  active: boolean;
+  currentProjectTitle?: string | null; // 학생
+  taughtProjectCount?: number | null;  // 교수
+}
+
+/** 관리자 사용자 관리 - 상단 집계 */
+export interface AdminUserSummary {
+  totalUsers: number;
+  totalStudents: number;
+  totalProfessors: number;
+  activeUsers: number;
+}
+
+export interface SystemActivity {
+  id: number;
+  title: string;
+  type: EventType | string;
+  projectId?: number | null;
+  projectTitle?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  location?: string | null;
 }
 
 /** ----- Schedule DTO ----- */
@@ -267,6 +287,7 @@ export interface BulkReviewResult {
   failCount: number;
   failedIds: number[];
 }
+
 
 /** ====== Notifications (프론트 집계형) ====== */
 export type NotificationType = "commit" | "feedback" | "schedule" | "team" | "assignment" | "system" |

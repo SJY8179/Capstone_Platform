@@ -72,6 +72,12 @@ public class TeamService {
                 .toList();
     }
 
+    public List<UserDto> listTeamMembersByRole(Long teamId, Role role) {
+        return teamMemberRepository.findUsersByTeamIdAndRole(teamId, role).stream()
+                .map(u -> new UserDto(u.getId(), u.getName(), u.getEmail()))
+                .toList();
+    }
+
     /**
      * 팀 생성
      *

@@ -1,6 +1,6 @@
 ﻿// === path : src/api/teams.ts
 import { http } from "@/api/http";
-import type { TeamListDto, TeamInvitation } from "@/types/domain";
+import type { TeamListDto, TeamInvitation, UserDto } from "@/types/domain";
 
 /** (학생/교수/관리자 공통) 내가 속한 팀 목록만 */
 export async function listTeams() {
@@ -18,17 +18,6 @@ export async function listTeamsByProfessor(): Promise<TeamListDto[]> {
 export async function listAllTeams(): Promise<TeamListDto[]> {
   const { data } = await http.get<TeamListDto[]>("/teams");
   return data;
-}
-
-/** 초대 가능한 유저(학생) 목록 */
-// export async function listInvitableUsers(teamId: number): Promise<UserDto[]> {
-//   const { data } = await http.get<UserDto[]>(`/teams/${teamId}/invitable-users`);
-//   return data;
-// }
-
-/** 팀원 초대 ((나중에 삭제 */
-export async function addTeamMember(teamId: number, userId: number): Promise<void> {
-  await http.post(`/teams/${teamId}/members`, { userId });
 }
 
 /** 팀원 초대 요청 */
@@ -77,4 +66,21 @@ export async function removeMember(teamId: number, memberId: number): Promise<vo
 /** 팀 삭제 */
 export async function deleteTeam(teamId: number): Promise<void> {
   await http.delete(`/teams/${teamId}`);
+}
+
+/** 모든 교수 목록 조회 */
+export async function getAllProfessors() {
+  const { data } = await http.get<Array<{ id: number; name: string; email: string }>>("/teams/professors");
+  return data;
+}
+
+/** 팀에 교수 추가 */
+export async function addProfessorToTeam(teamId: number, professorId: number) {
+  await http.post(`/teams/${teamId}/professors`, { userId: professorId });
+}
+
+/** 팀의 교수 목록 조회 */
+export async function listTeamProfessors(teamId: number) {
+  const { data } = await http.get<UserDto[]>(`/teams/${teamId}/professors`);
+  return data;
 }

@@ -32,8 +32,8 @@ export type ActivePage =
   | "users"
   | "schedule"
   | "assignments"
-  | "notifications"   // ✅ 추가
-  | "settings";       // ✅ 유지
+  | "notifications"
+  | "settings";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -51,10 +51,10 @@ export default function App() {
       return saved
         ? JSON.parse(saved)
         : {
-            fontSize: "medium",
-            sidebarBehavior: "auto",
-            isDarkMode: window.matchMedia("(prefers-color-scheme: dark)").matches,
-          };
+          fontSize: "medium",
+          sidebarBehavior: "auto",
+          isDarkMode: window.matchMedia("(prefers-color-scheme: dark)").matches,
+        };
     } catch {
       return { fontSize: "medium", sidebarBehavior: "auto", isDarkMode: false };
     }
