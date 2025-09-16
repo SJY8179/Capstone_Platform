@@ -52,6 +52,7 @@ public class ScheduleService {
                 case DEADLINE -> "deadline";
                 case PRESENTATION -> "presentation";
                 case ETC -> "task";
+                case SYSTEM_ACTION -> "system";
             };
             out.add(new ScheduleDto(
                     "E-" + e.getId(),
