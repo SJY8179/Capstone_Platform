@@ -1,5 +1,5 @@
 // === path : src/components/Notifications/NotificationCenter.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -20,113 +20,121 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { UserRole } from '@/types/user';
+import { Notification, NotificationPageResponse } from '@/types/domain';
+import { notificationApi } from '@/api/notifications';
 
-export interface Notification {
-  id: string;
-  type: 'commit' | 'feedback' | 'schedule' | 'team' | 'assignment' | 'system';
-  title: string;
-  message: string;
-  timestamp: Date;
-  read: boolean;
-  priority: 'low' | 'medium' | 'high';
-  relatedId?: string;
-  author?: {
-    name: string;
-    avatar?: string;
-  };
-}
 
 interface NotificationCenterProps {
   userRole: UserRole; // ✅ 앱 전역 UserRole 사용 (ta 포함)
 }
 
-// 데모 데이터
-const demoNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'commit',
-    title: '새로운 커밋이 푸시되었습니다',
-    message: '김철수님이 "프론트엔드 로그인 기능 구현"을 커밋했습니다.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    read: false,
-    priority: 'medium',
-    author: { name: '김철수' }
-  },
-  {
-    id: '2',
-    type: 'feedback',
-    title: '새로운 피드백이 도착했습니다',
-    message: '박교수님이 중간 발표 자료에 피드백을 남겼습니다: "전체적으로 좋으나 기술적 세부사항이 부족합니다."',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    read: false,
-    priority: 'high',
-    author: { name: '박교수' }
-  },
-  {
-    id: '3',
-    type: 'schedule',
-    title: '오늘 일정 알림',
-    message: '오후 2시: 팀 미팅, 오후 4시: 멘토링 세션이 예정되어 있습니다.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3),
-    read: true,
-    priority: 'medium'
-  }
-];
 
 export function NotificationCenter({ userRole }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState<Notification[]>(demoNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'commit': return <GitCommit className="h-4 w-4" />;
-      case 'feedback': return <MessageSquare className="h-4 w-4" />;
-      case 'schedule': return <Calendar className="h-4 w-4" />;
-      case 'team': return <Users className="h-4 w-4" />;
-      case 'assignment': return <FileText className="h-4 w-4" />;
-      case 'system': return <AlertCircle className="h-4 w-4" />;
-      default: return <AlertCircle className="h-4 w-4" />;
+  // 알림 데이터 로딩
+  const loadNotifications = async (pageNum = 0, reset = false) => {
+    try {
+      setLoading(true);
+      const response = await notificationApi.getNotifications({
+        page: pageNum,
+        size: 10,
+        unreadOnly: filter === 'unread' ? true : filter === 'read' ? false : undefined,
+        sort: 'createdAt,desc'
+      });
+
+      if (reset) {
+        setNotifications(response.content);
+      } else {
+        setNotifications(prev => [...prev, ...response.content]);
+      }
+
+      setHasMore(!response.last);
+      setPage(pageNum);
+    } catch (error) {
+      console.error('알림 로딩 실패:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPriorityColor = (priority: Notification['priority']) => {
-    switch (priority) {
-      case 'high': return 'destructive';
-      case 'medium': return 'default';
-      case 'low': return 'secondary';
-      default: return 'outline';
+  // 30초마다 폴링
+  useEffect(() => {
+    loadNotifications(0, true);
+
+    const interval = setInterval(() => {
+      loadNotifications(0, true);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [filter]);
+
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'PROJECT_CREATED': return <GitCommit className="h-4 w-4" />;
+      case 'PROJECT_ASSIGNED': return <Users className="h-4 w-4" />;
+      case 'COMMENT_ADDED': return <MessageSquare className="h-4 w-4" />;
+      case 'SYSTEM': return <AlertCircle className="h-4 w-4" />;
+      default: return <AlertCircle className="h-4 w-4" />;
     }
   };
 
   const getTypeLabel = (type: Notification['type']) => {
     switch (type) {
-      case 'commit': return '커밋';
-      case 'feedback': return '피드백';
-      case 'schedule': return '일정';
-      case 'team': return '팀';
-      case 'assignment': return '과제';
-      case 'system': return '시스템';
+      case 'PROJECT_CREATED': return '프로젝트 생성';
+      case 'PROJECT_ASSIGNED': return '프로젝트 배정';
+      case 'COMMENT_ADDED': return '댓글';
+      case 'SYSTEM': return '시스템';
       default: return type;
     }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markAsRead = async (id: number) => {
+    try {
+      await notificationApi.markRead(id, true);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (error) {
+      console.error('읽음 처리 실패:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      await notificationApi.markAllRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    } catch (error) {
+      console.error('전체 읽음 처리 실패:', error);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+  const deleteNotification = async (id: number) => {
+    try {
+      await notificationApi.deleteNotification(id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (error) {
+      console.error('삭제 실패:', error);
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.isRead) {
+      markAsRead(notification.id);
+    }
+    if (notification.linkUrl) {
+      // 브라우저 네이티브 네비게이션 사용
+      window.location.href = notification.linkUrl;
+    }
   };
 
   const filtered = notifications.filter(n =>
-    filter === 'unread' ? !n.read : filter === 'read' ? n.read : true
+    filter === 'unread' ? !n.isRead : filter === 'read' ? n.isRead : true
   );
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div className="space-y-6">
@@ -167,11 +175,12 @@ export function NotificationCenter({ userRole }: NotificationCenterProps) {
                 filtered.map((n) => (
                   <Card
                     key={n.id}
-                    className={`transition-all hover:shadow-md ${!n.read ? 'border-l-4 border-l-primary bg-muted/20' : ''}`}
+                    className={`transition-all hover:shadow-md cursor-pointer ${!n.isRead ? 'border-l-4 border-l-primary bg-muted/20' : ''}`}
+                    onClick={() => handleNotificationClick(n)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-4">
-                        <div className={`p-2 rounded-md ${!n.read ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                        <div className={`p-2 rounded-md ${!n.isRead ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                           {getNotificationIcon(n.type)}
                         </div>
 
@@ -179,22 +188,21 @@ export function NotificationCenter({ userRole }: NotificationCenterProps) {
                           <div className="flex items-start justify-between gap-2">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <h4 className={!n.read ? 'font-semibold' : ''}>{n.title}</h4>
-                                <Badge variant={getPriorityColor(n.priority)} className="text-xs">
+                                <h4 className={!n.isRead ? 'font-semibold' : ''}>{n.title}</h4>
+                                <Badge variant="default" className="text-xs">
                                   {getTypeLabel(n.type)}
                                 </Badge>
-                                {!n.read && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
+                                {!n.isRead && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
                               </div>
                               <p className="text-sm text-muted-foreground">{n.message}</p>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Clock className="h-3 w-3" />
-                                <span>{formatDistanceToNow(n.timestamp, { addSuffix: true, locale: ko })}</span>
-                                {n.author && (<><span>•</span><span>{n.author.name}</span></>)}
+                                <span>{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ko })}</span>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1">
-                              {!n.read && (
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              {!n.isRead && (
                                 <Button variant="ghost" size="sm" onClick={() => markAsRead(n.id)}>
                                   <CheckCircle2 className="h-4 w-4" />
                                 </Button>

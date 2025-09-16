@@ -5,6 +5,9 @@ import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.Proje
 import com.miniproject2_4.CapstoneProjectManagementPlatform.controller.dto.ProjectListDto;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.entity.*;
 import com.miniproject2_4.CapstoneProjectManagementPlatform.repository.*;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.notification.service.NotificationService;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.notification.dto.CreateNotificationRequest;
+import com.miniproject2_4.CapstoneProjectManagementPlatform.notification.domain.NotificationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,7 @@ public class ProjectService {
     private final TeamMemberRepository teamMemberRepository;
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
+    private final NotificationService notificationService;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -61,6 +65,27 @@ public class ProjectService {
                 .status(Project.Status.PLANNING)
                 .build();
         project = projectRepository.save(project);
+
+        // 알림 생성: 팀 멤버들에게 새 프로젝트 생성 알림
+        try {
+            List<TeamMember> teamMembers = teamMemberRepository.findWithUserByTeamId(team.getId());
+            for (TeamMember member : teamMembers) {
+                if (!member.getUser().getId().equals(creator.getId())) { // 생성자 본인 제외
+                    notificationService.create(new CreateNotificationRequest(
+                        member.getUser().getId(),
+                        NotificationType.PROJECT_CREATED,
+                        "[프로젝트 생성] " + project.getTitle(),
+                        creator.getName() + "님이 새 프로젝트를 생성했습니다.",
+                        "/projects/" + project.getId(),
+                        String.format("{\"projectId\": %d, \"projectName\": \"%s\", \"creatorId\": %d}",
+                            project.getId(), project.getTitle(), creator.getId())
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            // 알림 생성 실패는 프로젝트 생성을 막지 않음
+            // TODO: 로깅 추가 고려
+        }
 
         return toListDto(project);
     }

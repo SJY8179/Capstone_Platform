@@ -1,5 +1,30 @@
 // === path : src/types/domain.ts
 
+/** ------------ Notifications ------------- */
+export type NotificationType = 'PROJECT_CREATED' | 'PROJECT_ASSIGNED' | 'COMMENT_ADDED' | 'SYSTEM';
+
+export interface Notification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message?: string;
+  linkUrl?: string;
+  isRead: boolean;
+  createdAt: string;
+  readAt?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface NotificationPageResponse {
+  content: Notification[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
 /** ------------ Projects ------------- */
 export type ProjectStatus = "in-progress" | "review" | "completed" | "planning";
 
