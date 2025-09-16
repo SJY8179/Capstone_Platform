@@ -36,6 +36,7 @@ public class Project extends BaseEntity {
 
     /** 아카이브 여부 (소프트 삭제 플래그) */
     @Column(nullable = false)
+    @Builder.Default
     private Boolean archived = false;
 
     /** ProjectService에서 참조하는 중첩 enum */

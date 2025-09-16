@@ -54,10 +54,30 @@ public class ProjectService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "선택한 팀의 멤버가 아닙니다.");
         }
 
+        // 담당 교수 결정
+        UserAccount professor = null;
+        if (request.professorId() != null) {
+            // 요청에서 교수 ID가 지정된 경우
+            professor = userRepository.findById(request.professorId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "지정한 교수가 존재하지 않습니다."));
+
+            if (professor.getRole() != Role.PROFESSOR) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "지정한 사용자가 교수가 아닙니다.");
+            }
+        } else if (creator.getRole() == Role.PROFESSOR) {
+            // 프로젝트 생성자가 교수인 경우, 자동으로 담당 교수로 설정
+            professor = creator;
+        } else {
+            // 교수가 지정되지 않은 경우, 시스템의 첫 번째 교수를 자동 할당
+            professor = userRepository.findFirstByRole(Role.PROFESSOR)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "시스템에 교수가 등록되어 있지 않습니다."));
+        }
+
         // 프로젝트 생성 (상태는 PLANNING으로 시작)
         Project project = Project.builder()
                 .title(request.title())
                 .team(team)
+                .professor(professor)
                 .status(Project.Status.PLANNING)
                 .build();
         project = projectRepository.save(project);
