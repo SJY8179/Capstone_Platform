@@ -84,6 +84,29 @@ public class EventService {
         eventRepository.delete(e);
     }
 
+    @Transactional
+    public void logSystemActivity(String message, Long projectId) {
+        if (projectId == null || message == null || message.isBlank()) {
+            return;
+        }
+
+        Project project = projectRepository.findById(projectId).orElse(null);
+        if (project == null) {
+            return;
+        }
+
+        Event systemEvent = Event.builder()
+                .project(project)
+                .title(message)
+                .startAt(LocalDateTime.now())
+                .endAt(null)
+                .type(EventType.ETC)
+                .location("시스템")
+                .build();
+
+        eventRepository.save(systemEvent);
+    }
+
     /** "yyyy-MM-ddTHH:mm:ss" | Offset | Instant | "yyyy-MM-dd" 지원 */
     private static LocalDateTime parseDateTime(String v) {
         if (v == null || v.isBlank()) return null;
