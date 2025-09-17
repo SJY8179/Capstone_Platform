@@ -111,3 +111,34 @@ app.base-url=https://yourapp.com
 ```
 
 **참고**: 현재 이메일 발송 기능은 로그 출력으로 구현되어 있습니다. 실제 운영 환경에서는 SMTP 설정을 통한 실제 이메일 발송 구현이 필요합니다.
+
+
+
+
+MariaDB [capstone]> SHOW CREATE TABLE professor_assignment_request\G
+
+명령어 사용후
+
+FOREIGN KEY (project_id) 확인 후 아래 명령어에 키 넣은 후 실행
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 1) 정확한 외래키 이름으로 드롭
+ALTER TABLE professor_assignment_request
+DROP FOREIGN KEY `FOREIGN KEY (project_id)`;
+
+-- 2) 컬럼을 NULL 허용으로 변경
+ALTER TABLE professor_assignment_request
+MODIFY COLUMN project_id BIGINT NULL;
+
+-- 3) FK 재생성 (사전요청 레코드 삭제 방지용으로 ON DELETE SET NULL 권장)
+ALTER TABLE professor_assignment_request
+ADD CONSTRAINT `fk_par_project_nullable`
+FOREIGN KEY (project_id) REFERENCES project(id)
+ON DELETE SET NULL;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+검증 방법
+
+DESCRIBE professor_assignment_request; 실행 후 project_id의 Null = YES 값 이어야 함.
