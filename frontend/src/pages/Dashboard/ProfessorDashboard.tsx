@@ -1,4 +1,3 @@
-// src/pages/Dashboard/ProfessorDashboard.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
@@ -22,6 +21,8 @@ import {
   RefreshCw,
   History,
   MessageSquare,
+  Check,
+  X,
 } from "lucide-react";
 import { getProfessorSummary, type ProfessorSummary } from "@/api/dashboard";
 import { toast } from "sonner";
@@ -35,18 +36,25 @@ import {
 } from "@/components/ui/dialog";
 import {
   bulkReview,
-  // 아래 API는 "검토 이력" 조회용입니다.
   getReviewHistory,
   type ReviewHistoryItem,
   type ReviewAction,
 } from "@/api/professorReview";
+import {
+  listPendingProfessorRequests,
+  approveProfessorRequest,
+  rejectProfessorRequest,
+  type ProfessorRequest,
+} from "@/api/professorRequests";
 import { scheduleBus } from "@/lib/schedule-bus";
+import { CreateProjectModal } from "@/components/Projects/CreateProjectModal";
+import type { ProjectListDto } from "@/types/domain";
 
 const TEXTS = {
   loading: "로딩중...",
   headerTitle: "교수 대시보드",
   headerDescription: "담당 강좌 및 프로젝트 현황을 확인하세요.",
-  teams: "진행 팀",
+  projects: "진행 프로젝트",
   pendingReviews: "검토 대기",
   students: "수강 학생",
   avgProgress: "평균 진도",
@@ -79,6 +87,13 @@ const TEXTS = {
   historyTitle: "검토 이력",
   historyEmpty: "이력이 없습니다.",
   historyLoadError: "이력을 불러오지 못했습니다.",
+
+  // 담당 교수 배정 요청
+  assignReqTitle: "담당 교수 지정 요청",
+  assignReqDesc: "본인에게 들어온 담당 교수 배정 요청입니다.",
+  assignReqEmpty: "대기 중인 배정 요청이 없습니다.",
+  approve: "승인",
+  reject: "거절",
 };
 
 type ReviewStatus = "PENDING" | "ONGOING" | "COMPLETED";
@@ -93,11 +108,11 @@ function fmtDateTime(iso?: string | null) {
   try {
     return new Date(iso).toLocaleString("ko-KR");
   } catch {
-    return iso;
+    return iso ?? "";
   }
 }
 
-/** 상태 배지 스타일(신규 컴포넌트 없이 클래스만 통일) */
+/** 상태 배지 스타일 */
 function statusBadgeClass(s?: string | null) {
   switch (s) {
     case "PENDING":
@@ -118,6 +133,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   const [needProjectOpen, setNeedProjectOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [recentTab, setRecentTab] = useState<RecentTab>("ALL");
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   // 메모 입력 다이얼로그
   const [memoOpen, setMemoOpen] = useState(false);
@@ -136,17 +152,34 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   const [historyItems, setHistoryItems] = useState<ReviewHistoryItem[]>([]);
   const [historyTitle, setHistoryTitle] = useState<string>("");
 
-  /** 공통 로더 */
-  const load = async () => {
+  // 담당 교수 배정 요청 (교수 본인 수신함)
+  const [reqLoading, setReqLoading] = useState(false);
+  const [requests, setRequests] = useState<ProfessorRequest[]>([]);
+  const [actBusyId, setActBusyId] = useState<number | null>(null);
+
+  /** 데이터 로더 */
+  const loadSummary = async () => {
     const res = await getProfessorSummary();
     setData(res);
+  };
+  const loadRequests = async () => {
+    setReqLoading(true);
+    try {
+      const rows = await listPendingProfessorRequests();
+      setRequests(rows ?? []);
+    } catch (e) {
+      console.error(e);
+      setRequests([]);
+    } finally {
+      setReqLoading(false);
+    }
   };
 
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        await load();
+        await Promise.all([loadSummary(), loadRequests()]);
       } catch (e) {
         console.error(e);
       } finally {
@@ -155,22 +188,15 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     })();
   }, []);
 
-  // ★ 일정 변경 버스 구독 → 자동 새로고침
+  // 일정 변경 버스 구독 → 자동 새로고침
   useEffect(() => {
-    const handler = () => {
-      // 과도한 호출 방지: 약간 지연 후 새로고침
-      setTimeout(() => {
-        refreshSummary();
-      }, 120);
-    };
+    const handler = () => setTimeout(() => refreshAll(), 120);
     let off: (() => void) | undefined;
     try {
-      // onChanged(handler) 형태
       // @ts-ignore
       off = scheduleBus.onChanged?.(handler);
-    } catch {}
+    } catch { }
     try {
-      // on("changed", h)/off("changed", h) 형태
       // @ts-ignore
       if (!off && typeof scheduleBus.on === "function") {
         // @ts-ignore
@@ -179,21 +205,21 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           try {
             // @ts-ignore
             scheduleBus.off?.("changed", handler);
-          } catch {}
+          } catch { }
         };
       }
-    } catch {}
+    } catch { }
     return () => {
       try {
         off?.();
-      } catch {}
+      } catch { }
     };
   }, []);
 
-  const refreshSummary = async () => {
+  const refreshAll = async () => {
     try {
       setRefreshing(true);
-      await load();
+      await Promise.all([loadSummary(), loadRequests()]);
     } finally {
       setRefreshing(false);
     }
@@ -201,16 +227,14 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
 
   /** ------- 로컬 즉시 반영 유틸 ------- */
 
-  // pendingReviews 카운트를 안전하게 감소
   function decPendingCount(prev: ProfessorSummary | null, dec: number) {
     if (!prev?.metrics) return prev;
     const cur = Number(prev.metrics.pendingReviews ?? 0);
     const next = Math.max(0, cur - dec);
-    // @ts-ignore(백엔드 DTO 구조 그대로 사용)
+    // @ts-ignore
     return { ...prev, metrics: { ...prev.metrics, pendingReviews: next } };
   }
 
-  // 최근 제출물의 단일 아이템 상태 패치
   function patchRecentStatus(
     prev: ProfessorSummary,
     assignmentId: number,
@@ -222,7 +246,6 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     return { ...prev, recentSubmissions: recent ?? prev.recentSubmissions };
   }
 
-  // 여러 아이템을 COMPLETED로 패치
   function patchRecentStatusesCompleted(
     prev: ProfessorSummary,
     ids: number[]
@@ -234,15 +257,13 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     return { ...prev, recentSubmissions: recent ?? prev.recentSubmissions };
   }
 
-  /** ------- 액션 처리 (핵심) ------- */
+  /** ------- 검토 액션 ------- */
 
-  // 단건 승인/반려: 낙관적 업데이트(즉시 제거/상태반영) + 서버 재조회로 일관성 보정
   const handleSingle = async (
     action: ReviewAction,
     assignmentId: number,
     projectIdForRow: number
   ) => {
-    // 1) 즉시 반영: 두 경우 모두 '검토 대기'에서 제거 + 카운트 감소
     setData((prev) => {
       if (!prev) return prev;
       const afterDec = decPendingCount(prev, 1) as ProfessorSummary;
@@ -252,48 +273,36 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           (p) => p.assignmentId !== assignmentId
         ),
       } as ProfessorSummary;
-
       const statusAfter: ReviewStatus =
         action === "APPROVE" ? "COMPLETED" : "ONGOING";
       return patchRecentStatus(afterRemove, assignmentId, statusAfter);
     });
-
     try {
       setBulkLoading(true);
       await bulkReview(action, [{ assignmentId, projectId: projectIdForRow }]);
     } finally {
       setBulkLoading(false);
-      // 성공/실패 모두 최종 싱크
-      await refreshSummary();
+      await refreshAll();
     }
   };
 
-  // 메모 입력을 통한 확정 처리 (메모 저장 포함)
-  // 승인/반려 + 메모 전송
   const submitDecisionWithMemo = async () => {
     if (!memoTarget || !memoAction) return;
-
     const comment = memoText.trim();
-    // 반려일 때는 코멘트 필수
     if (memoAction === "REJECT" && !comment) {
       toast.error("반려 사유를 입력하세요.");
       return;
     }
-
     setMemoBusy(true);
     try {
-      // 1) 일괄 검토 API로 코멘트 포함 전송
       await bulkReview(memoAction, [
         {
           assignmentId: memoTarget.assignmentId,
           projectId: memoTarget.projectId,
-          comment: comment || undefined, // 비어있으면 undefined
+          comment: comment || undefined,
         },
       ]);
-
       toast.success(memoAction === "APPROVE" ? "승인 완료" : "반려 처리");
-
-      // 2) 로컬 즉시 반영 (카운트/목록/최근 제출물 갱신 등)
       setData((prev) => {
         if (!prev) return prev;
         const afterDec = decPendingCount(prev, 1) as ProfessorSummary;
@@ -303,7 +312,6 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
             (p) => p.assignmentId !== memoTarget.assignmentId
           ),
         } as ProfessorSummary;
-
         const statusAfter: ReviewStatus =
           memoAction === "APPROVE" ? "COMPLETED" : "ONGOING";
         return patchRecentStatus(afterRemove, memoTarget.assignmentId, statusAfter);
@@ -315,12 +323,10 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
       setMemoBusy(false);
       setMemoOpen(false);
       setMemoText("");
-      // 서버 진실원천으로 싱크
-      await refreshSummary();
+      await refreshAll();
     }
   };
 
-  // 일괄 승인: 전부 성공이면 로컬 즉시 반영, 그래도 마지막엔 재조회로 싱크
   const onBulkApprove = async () => {
     const items = data?.pendingReviews ?? [];
     if (!items.length) return;
@@ -334,9 +340,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
     try {
       setBulkLoading(true);
       const { successCount, failCount } = await bulkReview("APPROVE", payload);
-
       if (successCount === items.length) {
-        // (옵션) 즉시 반영
         const ids = payload.map((p) => p.assignmentId);
         setData((prev) => {
           if (!prev) return prev;
@@ -345,14 +349,13 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           return { ...patchedRecent, pendingReviews: [] };
         });
       }
-
       toast.success(`일괄 검토 완료 — 성공 ${successCount}건, 실패 ${failCount}건`);
     } catch (e) {
       console.error(e);
       toast.error("일괄 검토 실패");
     } finally {
       setBulkLoading(false);
-      await refreshSummary(); // 항상 최종 싱크
+      await refreshAll();
     }
   };
 
@@ -395,19 +398,31 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
 
   const metrics = data?.metrics;
   const noProject =
-    (metrics?.runningTeams ?? 0) === 0 &&
+    (metrics?.courses ?? 0) === 0 &&
     (data?.recentSubmissions?.length ?? 0) === 0 &&
     (data?.topTeams?.length ?? 0) === 0;
 
   /** 최근 제출물 탭 필터링(프론트에서만 적용) */
   const recentFiltered =
     data?.recentSubmissions?.filter((s) =>
-      recentTab === "ALL" ? true : s.status === recentTab
+      (["ALL", "PENDING", "ONGOING", "COMPLETED"] as RecentTab[]).includes(
+        recentTab
+      )
+        ? recentTab === "ALL"
+          ? true
+          : s.status === recentTab
+        : true
     ) ?? [];
 
-  // 이력 항목 색상/라벨
+  /** 이력 항목 색상/라벨 */
   const historyActionLabel = (a?: string) =>
-    a === "APPROVE" ? "승인" : a === "REJECT" ? "반려" : a === "REQUEST" ? "검토요청" : "기타";
+    a === "APPROVE"
+      ? "승인"
+      : a === "REJECT"
+        ? "반려"
+        : a === "REQUEST"
+          ? "검토요청"
+          : "기타";
   const historyActionClass = (a?: string) =>
     a === "APPROVE"
       ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
@@ -432,7 +447,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={refreshSummary}
+            onClick={refreshAll}
             disabled={refreshing || bulkLoading}
             className="flex items-center gap-1"
           >
@@ -445,11 +460,10 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
             size="sm"
             onClick={() => {
               if (!projectId) {
-                // ★ 프로젝트 미지정: 토스트 + 다이얼로그 동시 노출
                 toast.info("프로젝트 참여가 필요합니다.");
                 setNeedProjectOpen(true);
               } else {
-                // 프로젝트가 지정되어 있다면, 스케줄 탭으로 이동/연결하는 로직을 여기에 추가할 수 있습니다.
+                // 프로젝트가 지정되어 있다면, 일정 관리로 보내는 로직을 후속으로 연결할 수 있습니다.
               }
             }}
           >
@@ -469,9 +483,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
             <div className="flex gap-2">
               <Button
                 size="sm"
-                onClick={() =>
-                  toast.info("프로젝트 생성은 추후 연결 예정입니다.")
-                }
+                onClick={() => setCreateProjectOpen(true)}
               >
                 {TEXTS.createProject}
               </Button>
@@ -491,6 +503,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
 
       {/* 메트릭 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 변경: 진행 프로젝트 수 표시 (metrics.courses) */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -499,9 +512,9 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
               </div>
               <div>
                 <p className="text-2xl font-semibold">
-                  {metrics?.runningTeams ?? 0}
+                  {metrics?.courses ?? 0}
                 </p>
-                <p className="text-sm text-muted-foreground">{TEXTS.teams}</p>
+                <p className="text-sm text-muted-foreground">{TEXTS.projects}</p>
               </div>
             </div>
           </CardContent>
@@ -559,6 +572,97 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* 담당 교수 지정 요청 (대기 목록) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>{TEXTS.assignReqTitle}</CardTitle>
+              <CardDescription>{TEXTS.assignReqDesc}</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadRequests}
+              disabled={reqLoading}
+            >
+              {reqLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              새로고침
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-3">
+          {requests.length ? (
+            requests.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between border rounded-xl px-4 py-3 bg-card"
+              >
+                <div className="space-y-1">
+                  <div className="font-medium">{r.projectTitle}</div>
+                  <div className="text-xs text-muted-foreground">
+                    요청 시각 • {fmtDateTime(r.requestedAt)}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={actBusyId === r.id}
+                    onClick={async () => {
+                      setActBusyId(r.id);
+                      try {
+                        await approveProfessorRequest(r.id);
+                        toast.success("담당 교수로 승인했어요.");
+                      } catch (e) {
+                        console.error(e);
+                        toast.error("승인에 실패했습니다.");
+                      } finally {
+                        setActBusyId(null);
+                        await refreshAll();
+                      }
+                    }}
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    {TEXTS.approve}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={actBusyId === r.id}
+                    onClick={async () => {
+                      setActBusyId(r.id);
+                      try {
+                        await rejectProfessorRequest(r.id);
+                        toast.success("요청을 거절했어요.");
+                      } catch (e) {
+                        console.error(e);
+                        toast.error("거절에 실패했습니다.");
+                      } finally {
+                        setActBusyId(null);
+                        await refreshAll();
+                      }
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    {TEXTS.reject}
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-10 text-muted-foreground">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
+              <p>{TEXTS.assignReqEmpty}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 검토 대기 목록 */}
       <Card>
@@ -661,7 +765,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
               </CardDescription>
             </div>
 
-            {/* 최근 제출물 상태 탭(ALL/PENDING/ONGOING/COMPLETED) */}
+            {/* 최근 제출물 상태 탭 */}
             <div className="w-full">
               <div className="inline-flex items-center gap-1 rounded-lg border p-1">
                 {(["ALL", "PENDING", "ONGOING", "COMPLETED"] as RecentTab[]).map(
@@ -691,7 +795,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
             </div>
           </CardHeader>
 
-        <CardContent className="p-6 space-y-2">
+          <CardContent className="p-6 space-y-2">
             {recentFiltered.length ? (
               recentFiltered.map((s) => (
                 <div
@@ -746,7 +850,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
         </Card>
       </div>
 
-      {/* 주간 캘린더(선택된 프로젝트 있을 때 하단 노출) */}
+      {/* 주간 캘린더 */}
       <CalendarWidget projectId={projectId} />
 
       {/* 프로젝트 필요 안내 다이얼로그 */}
@@ -758,10 +862,7 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
               <DialogDescription>{TEXTS.needProjectDesc}</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setNeedProjectOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setNeedProjectOpen(false)}>
                 {TEXTS.confirm}
               </Button>
             </DialogFooter>
@@ -778,15 +879,15 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                 ? TEXTS.memoDialogApproveTitle
                 : TEXTS.memoDialogRejectTitle}
             </DialogTitle>
-            {/* Description은 항상 채워두세요 */}
-            <DialogDescription>
-              작성한 메모는 과제의 검토 이력에 저장되며 팀원/교수에게 공유됩니다.
-            </DialogDescription>
+            <DialogDescription>{TEXTS.memoDialogDesc}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">
-              대상: <span className="font-medium">{memoTarget?.title ?? "제목 없음"}</span>
+              대상:{" "}
+              <span className="font-medium">
+                {memoTarget?.title ?? "제목 없음"}
+              </span>
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -805,7 +906,9 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                 disabled={memoBusy}
               />
               {memoAction === "REJECT" && !memoText.trim() && (
-                <p className="mt-1 text-xs text-amber-600">반려 사유를 입력해야 합니다.</p>
+                <p className="mt-1 text-xs text-amber-600">
+                  반려 사유를 입력해야 합니다.
+                </p>
               )}
             </div>
           </div>
@@ -822,7 +925,9 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
               onClick={submitDecisionWithMemo}
               disabled={memoBusy || (memoAction === "REJECT" && !memoText.trim())}
             >
-              {memoBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {memoBusy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
               {TEXTS.memoSubmit}
             </Button>
           </DialogFooter>
@@ -834,7 +939,8 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
         <DialogContent aria-describedby={undefined} className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {TEXTS.historyTitle} <span className="font-normal">{historyTitle}</span>
+              {TEXTS.historyTitle}{" "}
+              <span className="font-normal">{historyTitle}</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -855,14 +961,19 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
                   className="rounded-lg border p-3 bg-card"
                 >
                   <div className="flex items-center justify-between">
-                    <Badge className={historyActionClass(h.action)}>{historyActionLabel(h.action)}</Badge>
+                    <Badge className={historyActionClass(h.action)}>
+                      {historyActionLabel(h.action)}
+                    </Badge>
                     <span className="text-xs text-muted-foreground">
                       {fmtDateTime(h.at)}
                     </span>
                   </div>
                   {h.actorName && (
                     <div className="mt-1 text-xs text-muted-foreground">
-                      담당자: <span className="font-medium text-foreground">{h.actorName}</span>
+                      담당자:{" "}
+                      <span className="font-medium text-foreground">
+                        {h.actorName}
+                      </span>
                     </div>
                   )}
                   {h.note && (
@@ -876,6 +987,16 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 프로젝트 생성 모달 */}
+      <CreateProjectModal
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        onSuccess={(newProject: ProjectListDto) => {
+          toast.success("프로젝트가 생성되었습니다!");
+          refreshAll();
+        }}
+      />
     </div>
   );
 }
