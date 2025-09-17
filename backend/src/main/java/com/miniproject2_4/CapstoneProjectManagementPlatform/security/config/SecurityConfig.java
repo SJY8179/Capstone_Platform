@@ -56,6 +56,11 @@ public class SecurityConfig {
                         /** 관리자 전용 전체 팀 목록 보호 (학생/교수는 /teams/my 사용) */
                         .requestMatchers(HttpMethod.GET, "/teams").hasRole("ADMIN")
 
+                        /** 초대/알림 API 인증 필요 */
+                        .requestMatchers("/teams/*/invitations/**").authenticated()
+                        .requestMatchers("/invitations/**").authenticated()
+                        .requestMatchers("/notifications/**").authenticated()
+
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )

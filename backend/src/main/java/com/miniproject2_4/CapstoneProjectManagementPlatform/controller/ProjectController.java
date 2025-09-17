@@ -23,24 +23,29 @@ import java.util.List;
 public class ProjectController {
     private final ProjectService projectService;
 
-    /** 전체 프로젝트 목록: /api/projects (관리자 용도, 현재는 인증만 요구)
-     * Query param: status=active|archived (default: active)
+    /**
+     * 전체/내 프로젝트 목록
+     * GET /api/projects?status=active|archived (default: active)
+     * - 관리자: 전체
+     * - 교수/학생: 본인이 볼 수 있는 프로젝트 (교수는 멤버십 ∪ 담당교수)
      */
     @GetMapping("/projects")
-    public List<ProjectListDto> list(@RequestParam(defaultValue = "active") String status, Authentication auth) {
+    public List<ProjectListDto> list(@RequestParam(defaultValue = "active") String status,
+                                     Authentication auth) {
         UserAccount ua = ensureUser(auth);
         return projectService.listProjectsForUser(ua, status);
     }
 
-    /** 새 프로젝트 생성: /api/projects */
+    /** 새 프로젝트 생성: POST /api/projects */
     @PostMapping("/projects")
     @Transactional
-    public ProjectListDto createProject(@Valid @RequestBody CreateProjectRequest request, Authentication auth) {
+    public ProjectListDto createProject(@Valid @RequestBody CreateProjectRequest request,
+                                        Authentication auth) {
         UserAccount ua = ensureUser(auth);
         return projectService.createProject(request, ua);
     }
 
-    /** 내가 속한 프로젝트(+교수 담당 프로젝트 포함): /api/projects/my — ★일관된 DTO로 반환 */
+    /** 내가 볼 수 있는 프로젝트: GET /api/projects/my */
     @GetMapping("/projects/my")
     @Transactional(readOnly = true)
     public List<ProjectListDto> my(Authentication auth) {
@@ -48,7 +53,7 @@ public class ProjectController {
         return projectService.listProjectsForUser(ua);
     }
 
-    /** 단건 상세: /api/projects/{id} */
+    /** 단건 상세: GET /api/projects/{id} */
     @GetMapping("/projects/{id}")
     @Transactional(readOnly = true)
     public ProjectDetailDto getOne(@PathVariable Long id, Authentication auth) {
@@ -56,7 +61,10 @@ public class ProjectController {
         return projectService.getProjectDetail(id, ua);
     }
 
-    /** (옵션) 교수 전용: 담당 프로젝트 목록 — 프론트 폴백에서 호출 가능 */
+    /**
+     * (옵션) 교수 전용: 담당 프로젝트 목록 — 프론트 폴백에서 사용할 수 있음
+     * GET /api/projects/teaching
+     */
     @GetMapping("/projects/teaching")
     @Transactional(readOnly = true)
     public List<ProjectListDto> teaching(Authentication auth) {
@@ -65,17 +73,20 @@ public class ProjectController {
             return projectService.listProjects(); // 관리자면 전체
         }
         if (ua.getRole() != Role.PROFESSOR) {
-            return List.of(); // 학생이면 빈 배열
+            return List.of(); // 학생 등은 빈 배열
         }
-        return projectService.listProjectsByProfessor(ua.getId());
+        // ✅ 교수의 경우 서비스에서 이미 “멤버십 ∪ 담당교수” 합집합을 반환하므로 동일 로직 사용
+        return projectService.listProjectsForUser(ua);
     }
 
-    /** 깃허브 링크(소유자/레포) 업데이트: 관리자/교수는 제한 없이, 학생은 해당 프로젝트 멤버일 때만 */
+    /** 깃허브 링크(소유자/레포) 업데이트: PUT /api/projects/{id}/repo */
     public record RepoUpdateRequest(String githubUrl) {}
 
     @PutMapping("/projects/{id}/repo")
     @Transactional
-    public ProjectDetailDto updateRepo(@PathVariable Long id, @RequestBody RepoUpdateRequest body, Authentication auth) {
+    public ProjectDetailDto updateRepo(@PathVariable Long id,
+                                       @RequestBody RepoUpdateRequest body,
+                                       Authentication auth) {
         UserAccount ua = ensureUser(auth);
         String url = body == null ? null : body.githubUrl();
         return projectService.updateGithubUrl(id, url, ua);
@@ -108,6 +119,7 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
+    /* ===== 공통 인증 보조 ===== */
     private UserAccount ensureUser(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");

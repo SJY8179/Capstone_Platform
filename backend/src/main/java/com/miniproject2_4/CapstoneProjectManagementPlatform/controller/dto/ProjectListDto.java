@@ -14,7 +14,8 @@ public record ProjectListDto(
         Milestones milestones,
         NextDeadline nextDeadline      // null 허용
 ) {
-    public record Member(Long id, String name) {}
+    /** 목록 카드에 노출되는 팀 멤버 요약 + 전역 역할 */
+    public record Member(Long id, String name, String userRole) {}
     public record Milestones(int completed, int total) {}
     public record NextDeadline(String task, String date) {}
 }

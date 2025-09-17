@@ -41,6 +41,14 @@ public class GlobalExceptionHandler {
         return Map.of("message", e.getMessage());
     }
 
+    /** ✅ 중복 초대 등 비즈니스 상태 오류는 400으로 내려준다 */
+    @ExceptionHandler(IllegalStateException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> illegalState(IllegalStateException e) {
+        log.warn("400 BAD REQUEST (STATE)", e);
+        return Map.of("message", e.getMessage());
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public Map<String, Object> unauthorized(AuthenticationException e) {
@@ -52,12 +60,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public Map<String, Object> forbidden(AccessDeniedException e) {
         log.warn("403 FORBIDDEN", e);
-        return Map.of("message", "접근 권한이 없습니다.");
+        // ✅ 구체적인 사유 메시지 전달
+        return Map.of("message", (e.getMessage() != null && !e.getMessage().isBlank())
+                ? e.getMessage()
+                : "접근 권한이 없습니다.");
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<?> status(ResponseStatusException e) {
-        String code = e.getReason(); // guard에서 설정한 사유코드
+        String code = e.getReason();
         return ResponseEntity.status(e.getStatusCode())
                 .body(Map.of(
                         "code", code != null ? code : e.getStatusCode().toString(),
@@ -65,17 +76,17 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler({ DataAccessException.class, RuntimeException.class })
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Map<String, Object> server(Exception e) {
-        log.error("500 INTERNAL SERVER ERROR", e);
-        return Map.of("message", "서버 오류가 발생했습니다.");
-    }
-
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public Map<String, Object> conflict(org.springframework.dao.DataIntegrityViolationException e) {
         String reason = e.getMostSpecificCause() != null ? e.getMostSpecificCause().getMessage() : e.getMessage();
         return Map.of("error","DATA_INTEGRITY_VIOLATION","message", reason);
+    }
+
+    @ExceptionHandler({ DataAccessException.class, RuntimeException.class })
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Map<String, Object> server(Exception e) {
+        log.error("500 INTERNAL SERVER ERROR", e);
+        return Map.of("message", "서버 오류가 발생했습니다.");
     }
 }

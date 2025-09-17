@@ -10,12 +10,11 @@ import {
   MessageSquare, CalendarDays, GitBranch, CheckCircle2,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
-import { listTeams, listTeachingTeams, listAllTeams } from "@/api/teams";
+import { listTeams, listAllTeams, listInvitableUsers } from "@/api/teams";
 import type { TeamListDto, UserDto } from "@/types/domain";
 import { CreateTeamModal } from "@/components/Teams/CreateTeamModal";
 import { InviteMemberModal } from "@/components/Teams/InviteMemberModal";
 import { TeamSettingsModal } from "@/components/Teams/TeamSettingsModal";
-import { listInvitableUsers } from "@/types/user";
 
 interface TeamManagementProps {
   userRole: UserRole;
@@ -24,6 +23,24 @@ interface TeamManagementProps {
 function formatK(date?: string | null) {
   if (!date) return "-";
   return new Date(date).toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** 팀원 라벨 결정: 팀장 > (교수/관리자/조교) > 팀원 */
+function getDisplayRole(m: TeamListDto["members"][number]): "팀장" | "교수" | "관리자" | "조교" | "팀원" {
+  if (m.role === "leader") return "팀장";
+  switch ((m.userRole || "").toUpperCase()) {
+    case "PROFESSOR": return "교수";
+    case "ADMIN":     return "관리자";
+    case "TA":        return "조교";
+    default:          return "팀원";
+  }
+}
+
+/** 라벨 스타일 */
+function roleBadgeVariant(label: ReturnType<typeof getDisplayRole>) {
+  if (label === "팀장") return "default" as const;
+  if (label === "교수" || label === "관리자" || label === "조교") return "secondary" as const;
+  return "outline" as const;
 }
 
 export function TeamManagement({ userRole }: TeamManagementProps) {
@@ -45,9 +62,9 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
       setLoading(true);
       let data: TeamListDto[] = [];
       if (userRole === "admin") {
-        data = await listAllTeams(); // 관리자는 모든 팀 조회
+        data = await listAllTeams();
       } else {
-        data = await listTeams(); // 학생, 교수 모두 소속 팀만 조회 (/my 엔드포인트)
+        data = await listTeams(); // 학생/교수는 내 팀만
       }
       setTeams(data ?? []);
     } catch {
@@ -94,34 +111,21 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
     setShowSettingsModal(true);
   };
 
+  /** 초대 성공 시: 1) 팀 카드에 멤버 추가  2) 초대 가능 목록에서 즉시 제거  3) 선택된 팀 상태도 동기화 */
   const handleInviteSuccess = (teamId: number, newUser: UserDto) => {
-    setTeams((prev) =>
-      prev.map((t) =>
-        t.id === teamId
-          ? {
-              ...t,
-              members: [
-                ...t.members,
-                {
-                  id: newUser.id,
-                  name: newUser.name,
-                  email: newUser.email,
-                  role: "member",
-                  status: "active",
-                },
-              ],
-            }
-          : t
-      )
-    );
+    // 1) 모달의 초대 후보 목록에서 제거
+    setUsers((prev) => prev.filter((u) => u.id !== newUser.id));
+    // 2) (선택) 토스트는 모달에서 띄움. 팀 카드에 즉시 추가하지 않음.
   };
 
   const handleTeamUpdate = (updated: TeamListDto) => {
     setTeams((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setSelectedTeam((prev) => (prev && prev.id === updated.id ? updated : prev));
   };
 
   const handleTeamDelete = (teamId: number) => {
     setTeams((prev) => prev.filter((t) => t.id !== teamId));
+    setSelectedTeam((prev) => (prev && prev.id === teamId ? null : prev));
   };
 
   if (loading) return <div>Loading...</div>;
@@ -202,23 +206,27 @@ export function TeamManagement({ userRole }: TeamManagementProps) {
                 <div className="space-y-2">
                   <div className="text-sm font-medium">팀원 ({t.members.length})</div>
                   <div className="divide-y rounded-md border">
-                    {t.members.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between px-3 py-2">
-                        <div className="flex items-center gap-3">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <div className="text-sm">
-                            <div className="font-medium">{m.name}</div>
-                            <div className="text-muted-foreground">{m.email}</div>
+                    {t.members.map((m) => {
+                      const displayRole = getDisplayRole(m);
+                      return (
+                        <div key={m.id} className="flex items-center justify-between px-3 py-2">
+                          <div className="flex items-center gap-3">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <div className="font-medium">{m.name}</div>
+                              <div className="text-muted-foreground">{m.email}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {/* ⬇ 팀장/교수/관리자/조교/팀원 라벨 */}
+                            <Badge variant={roleBadgeVariant(displayRole)}>{displayRole}</Badge>
+                            {/* 전역 역할/상태 배지 (필요 없으면 제거 가능) */}
+                            <Badge variant="outline">{m.userRole ?? "MEMBER"}</Badge>
+                            <Badge variant="outline">{m.status}</Badge>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={m.role === "leader" ? "default" : "outline"}>
-                            {m.role === "leader" ? "팀장" : "팀원"}
-                          </Badge>
-                          <Badge variant="outline">{m.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

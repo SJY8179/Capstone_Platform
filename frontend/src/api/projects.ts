@@ -1,5 +1,5 @@
 import { http } from "@/api/http";
-import type { ProjectListDto, ProjectStatus, ProjectDetailDto, CreateProjectRequest } from "@/types/domain";
+import type { ProjectListDto, ProjectStatus, ProjectDetailDto } from "@/types/domain";
 
 /** 상태 문자열을 우리 타입으로 통일 */
 function normalizeStatus(raw: any): ProjectStatus {
@@ -24,8 +24,11 @@ function asString(v: any, fallback = ""): string {
   return v == null ? fallback : String(v);
 }
 
-/** 멤버 배열 정규화 */
-function normalizeMembers(raw: any): { id: number; name: string }[] {
+type GlobalRole = "STUDENT" | "TA" | "PROFESSOR" | "ADMIN";
+const GLOBAL_ROLES = new Set(["STUDENT","TA","PROFESSOR","ADMIN"]);
+
+/** 멤버 배열 정규화 (전역 역할 userRole 포함 처리) */
+function normalizeMembers(raw: any): { id: number; name: string; userRole?: GlobalRole }[] {
   const src =
     (Array.isArray(raw?.members) && raw.members) ||
     (Array.isArray(raw?.memberList) && raw.memberList) ||
@@ -47,9 +50,19 @@ function normalizeMembers(raw: any): { id: number; name: string }[] {
         (typeof m?.email === "string" ? m.email.split("@")[0] : undefined) ??
         `회원 ${idx + 1}`;
 
+      // 전역 역할 추출: userRole 우선, 그다음 globalRole, user.role, role(단, LEADER/MEMBER 같은 팀역할은 제외)
+      const rawRole =
+        m?.userRole ?? m?.globalRole ?? m?.user?.role ?? m?.role ?? null;
+      let userRole: GlobalRole | undefined = undefined;
+      if (typeof rawRole === "string") {
+        const uc = rawRole.trim().toUpperCase();
+        if (GLOBAL_ROLES.has(uc)) userRole = uc as GlobalRole;
+      }
+
       return {
         id: asNumber(m?.id ?? idx + 1),
         name: asString(name),
+        ...(userRole ? { userRole } : {}),
       };
     })
     .filter((m: any) => m && m.name);
@@ -298,16 +311,13 @@ export async function listMyProjects(): Promise<ProjectListDto[]> {
     const rows = normalizeListPayload(data);
     mapped = rows.map((r: any) => normalizeProject(r)).filter((p) => Number.isFinite(p.id));
   } catch (e) {
-    // /projects/my 호출 실패 시 보수적으로 빈 배열 반환 (정보 유출 방지)
     return [];
   }
 
   if (mapped.length === 0) {
-    // 팀 멤버가 아닌 계정은 빈 목록이 정상
     return [];
   }
 
-  // 항목이 있을 때만 보강 시도 (같은 ID로만 merge)
   if (mapped.some(isSparse)) {
     try {
       const { data: allData } = await http.get("/projects");
@@ -315,7 +325,7 @@ export async function listMyProjects(): Promise<ProjectListDto[]> {
       const byId = new Map(allRows.map((p) => [p.id, p]));
       mapped = mapped.map((p) => mergeProject(p, byId.get(p.id)));
     } catch {
-      // 전체 조회 실패해도 my 결과만 사용
+      // ignore
     }
   }
 
@@ -375,6 +385,7 @@ export function parseGithubInput(text: string): { owner: string; name: string; u
   }
   return null;
 }
+
 /** Archive project (soft delete) */
 export async function archiveProject(projectId: number): Promise<void> {
   await http.delete(`/projects/${projectId}`);

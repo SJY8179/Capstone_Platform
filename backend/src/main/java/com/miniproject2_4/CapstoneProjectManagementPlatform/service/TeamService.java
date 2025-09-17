@@ -24,44 +24,37 @@ public class TeamService {
     private final AssignmentRepository assignmentRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final EventService eventService;
 
-    /** (관리자) 전체 팀: /api/teams */
+    /** (관리자) 전체 팀 */
     public List<TeamListDto.Response> listTeams() {
-        return teamRepository.findAll().stream()
-                .map(this::convertToDto)
-                .toList();
+        return teamRepository.findAll().stream().map(this::convertToDto).toList();
     }
 
-    /** (공통) 내가 속한 팀만: /api/teams/my */
+    /** 내가 속한 팀만 */
     public List<TeamListDto.Response> listTeamsForUser(Long userId) {
-        return teamRepository.findAllByMemberUserId(userId).stream()
-                .map(this::convertToDto)
-                .toList();
+        return teamRepository.findAllByMemberUserId(userId).stream().map(this::convertToDto).toList();
     }
 
-    /** (교수) 내가 '담당 교수'인 프로젝트의 팀: /api/teams/teaching */
+    /** (교수) 내가 담당 교수인 프로젝트의 팀 */
     public List<TeamListDto.Response> listTeamsForProfessor(Long professorUserId) {
-        return teamRepository.findAllByProfessorUserId(professorUserId).stream()
-                .map(this::convertToDto)
-                .toList();
+        return teamRepository.findAllByProfessorUserId(professorUserId).stream().map(this::convertToDto).toList();
     }
 
-    /** /api/teams/{teamId}/invitable-users
-     * 팀원 초대 가능 목록 - 교수와 TA는 제외 (학생과 관리자만 초대 가능)
-     * 교수는 별도의 "교수 추가" 기능을 통해서만 추가
-     **/
+    /** 초대 가능 목록(교수/TA 제외) */
     public List<UserDto> findInvitableUsers(Long teamId) {
         Set<Long> memberIds = teamMemberRepository.findWithUserByTeamId(teamId).stream()
                 .map(tm -> tm.getUser().getId())
                 .collect(Collectors.toSet());
 
         return userRepository.findAll().stream()
-                .filter(user -> !memberIds.contains(user.getId()))
-                .filter(user -> user.getRole() != Role.PROFESSOR && user.getRole() != Role.TA)
-                .map(user -> new UserDto(user.getId(), user.getName(), user.getEmail()))
+                .filter(u -> !memberIds.contains(u.getId()))
+                .filter(u -> u.getRole() != Role.PROFESSOR && u.getRole() != Role.TA)
+                .map(u -> new UserDto(u.getId(), u.getName(), u.getEmail()))
                 .toList();
     }
 
+    /** 팀 역할별 사용자 */
     public List<UserDto> listTeamMembersByRole(Long teamId, Role role) {
         return teamMemberRepository.findUsersByTeamIdAndRole(teamId, role).stream()
                 .map(u -> new UserDto(u.getId(), u.getName(), u.getEmail()))
@@ -70,48 +63,53 @@ public class TeamService {
 
     /**
      * 팀 생성
-     *
-     * ⚠️ 트리거 충돌 방지를 위해 '팀 생성 시 자동 프로젝트 생성'을 하지 않습니다.
-     *    프로젝트는 이후 /projects API로 분리 생성하세요.
-     *
-     * 팀 생성자는 역할에 관계없이 리더로 추가됩니다.
+     * - 학생: LEADER 자동 추가
+     * - 교수: MEMBER 자동 추가 (LEADER 금지 트리거 회피)
+     * - 관리자: LEADER 자동 추가
+     * - 자동 프로젝트/이벤트 기록 없음
      */
     @Transactional
     public TeamListDto.Response createTeam(TeamListDto.CreateRequest request, Long userId) {
         UserAccount creator = findUserById(userId);
 
-        // 팀 이름 중복 체크
         if (teamRepository.existsByName(request.name())) {
             throw new IllegalStateException("이미 존재하는 팀 이름입니다: " + request.name());
         }
 
-        // 1) 팀 생성
         Team newTeam = Team.builder()
                 .name(request.name())
                 .description(request.description())
                 .build();
         teamRepository.save(newTeam);
 
-        // 2) 팀 생성자를 리더로 추가 (모든 역할)
-        TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
-        TeamMember leader = TeamMember.builder()
-                .id(id)
-                .team(newTeam)
-                .user(creator)
-                .roleInTeam(TeamRole.LEADER.name())
-                .build();
-        teamMemberRepository.save(leader);
-
-        // 3) 자동 프로젝트 생성 제거 (중요!)
-
-        // 4) 응답 매핑
+        if (creator.getRole() == Role.STUDENT) {
+            TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
+            TeamMember leader = TeamMember.builder()
+                    .id(id).team(newTeam).user(creator)
+                    .roleInTeam(TeamRole.LEADER.name())
+                    .build();
+            teamMemberRepository.save(leader);
+        } else if (creator.getRole() == Role.ADMIN) {
+            TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
+            TeamMember leader = TeamMember.builder()
+                    .id(id).team(newTeam).user(creator)
+                    .roleInTeam(TeamRole.LEADER.name())
+                    .build();
+            teamMemberRepository.save(leader);
+        } else if (creator.getRole() == Role.PROFESSOR) {
+            TeamMemberId id = new TeamMemberId(newTeam.getId(), creator.getId());
+            TeamMember member = TeamMember.builder()
+                    .id(id).team(newTeam).user(creator)
+                    .roleInTeam(TeamRole.MEMBER.name())
+                    .build();
+            teamMemberRepository.save(member);
+        }
         return convertToDto(newTeam);
     }
 
-    /** /api/teams/{teamId}/members **/
+    /** 팀원 즉시 추가(관리자 전용; 일반 사용자는 초대 플로우) */
     @Transactional
     public void addMember(Long teamId, Long userId, Long requesterId) {
-        // ✅ ADMIN은 언제든 초대 가능(가드 우회), 그 외는 팀 멤버만
         UserAccount requester = findUserById(requesterId);
         if (requester.getRole() != Role.ADMIN) {
             checkMemberPermission(teamId, requesterId);
@@ -126,98 +124,135 @@ public class TeamService {
         }
 
         TeamMember newTeamMember = TeamMember.builder()
-                .id(teamMemberId)
-                .team(team)
-                .user(user)
+                .id(teamMemberId).team(team).user(user)
                 .roleInTeam(TeamRole.MEMBER.name())
                 .build();
-
         teamMemberRepository.save(newTeamMember);
     }
 
+    /** 팀 정보 수정 — 팀장 OR 교수 OR 관리자 */
     @Transactional
     public TeamListDto.Response updateTeamInfo(Long teamId, TeamListDto.UpdateRequest request, Long requesterId) {
-        checkLeaderPermission(teamId, requesterId);
+        checkManagerPermission(teamId, requesterId);
         Team team = findTeamById(teamId);
         team.setName(request.name());
         team.setDescription(request.description());
         return convertToDto(team);
     }
 
+    /** 팀장 변경 — 팀장 OR 교수 OR 관리자 */
     @Transactional
     public void changeLeader(Long teamId, Long newLeaderId, Long requesterId) {
-        checkLeaderPermission(teamId, requesterId);
-        if (Objects.equals(requesterId, newLeaderId)) return;
+        // 권한: 팀장/교수/관리자
+        checkManagerPermission(teamId, requesterId);
 
-        TeamMember oldLeader = findTeamMemberById(teamId, requesterId);
+        // 새 리더는 반드시 "해당 팀"의 멤버여야 함
         TeamMember newLeader = findTeamMemberById(teamId, newLeaderId);
 
-        oldLeader.setRoleInTeam(TeamRole.MEMBER.name());
+        // 팀 전체 멤버 조회 (roleInTeam 대소문자/NULL 방어는 toRole로 처리)
+        List<TeamMember> members = teamMemberRepository.findWithUserByTeamId(teamId);
+        TeamMember currentLeader = null;
+        for (TeamMember tm : members) {
+            if (toRole(tm.getRoleInTeam()) == TeamRole.LEADER) {
+                currentLeader = tm;
+                break;
+            }
+        }
+
+        // 1) 현재 리더가 없으면(초기화 상태) → 새 리더만 지정
+        if (currentLeader == null) {
+            newLeader.setRoleInTeam(TeamRole.LEADER.name());
+            return;
+        }
+
+        // 2) 동일 인물로 리더 변경 요청이면 무시
+        if (Objects.equals(currentLeader.getUser().getId(), newLeaderId)) {
+            return;
+        }
+
+        // 3) 기존 리더는 MEMBER로 강등, 새 리더는 LEADER로 승격
+        currentLeader.setRoleInTeam(TeamRole.MEMBER.name());
         newLeader.setRoleInTeam(TeamRole.LEADER.name());
+
+        // 4) 데이터 정합성: 혹시 다수 리더가 존재하면 모두 MEMBER로 정리(신규 리더 제외)
+        for (TeamMember tm : members) {
+            if (toRole(tm.getRoleInTeam()) == TeamRole.LEADER
+                    && !Objects.equals(tm.getUser().getId(), newLeaderId)) {
+                tm.setRoleInTeam(TeamRole.MEMBER.name());
+            }
+        }
     }
 
+    /** 팀원 삭제 — 팀장 OR 교수 OR 관리자 (단, 리더는 삭제 불가) */
     @Transactional
     public void removeMember(Long teamId, Long memberId, Long requesterId) {
-        checkLeaderPermission(teamId, requesterId);
-        TeamMember member = findTeamMemberById(teamId, memberId);
+        // 권한: 팀장/교수/관리자
+        checkManagerPermission(teamId, requesterId);
 
+        TeamMember member = findTeamMemberById(teamId, memberId);
         if (toRole(member.getRoleInTeam()) == TeamRole.LEADER) {
             throw new IllegalStateException("팀 리더는 팀에서 삭제할 수 없습니다. 먼저 리더를 변경해주세요.");
         }
         teamMemberRepository.delete(member);
     }
 
+    /** 팀 삭제 — 팀장 OR 교수 OR 관리자 */
     @Transactional
     public void deleteTeam(Long teamId, Long requesterId) {
-        checkLeaderPermission(teamId, requesterId);
+        checkManagerPermission(teamId, requesterId);
 
-        // 프로젝트 연결 여부 확인 (연결되어 있으면 삭제 불가)
         if (resolveProjectForTeam(teamId) != null) {
             throw new IllegalStateException("프로젝트에 할당된 팀은 삭제할 수 없습니다.");
         }
+
+        Team team = findTeamById(teamId);
+        UserAccount requester = findUserById(requesterId);
+
+        eventService.logSystemActivity("팀 삭제: " + team.getName() + " (삭제자: " + requester.getName() + ")", null);
+
         teamMemberRepository.deleteByTeamId(teamId);
         teamRepository.deleteById(teamId);
     }
 
-    /** TeamMember.roleInTeam 이 String/Enum 어느 쪽이든 안전 변환 */
+    /** ───── 권한/유틸 ───── */
+
     private static TeamRole toRole(Object raw) {
         if (raw == null) return TeamRole.MEMBER;
         if (raw instanceof TeamRole r) return r;
         if (raw instanceof String s) {
-            try { return TeamRole.valueOf(s.toUpperCase()); }
-            catch (IllegalArgumentException ignore) { /* fall-through */ }
+            try { return TeamRole.valueOf(s.toUpperCase()); } catch (IllegalArgumentException ignore) {}
         }
         return TeamRole.MEMBER;
     }
 
-    /** 요청자가 해당 팀의 멤버인지 확인 */
     private void checkMemberPermission(Long teamId, Long userId) {
         if (!teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, userId)) {
             throw new AccessDeniedException("팀에 소속된 멤버만 이 작업을 수행할 수 있습니다.");
         }
     }
 
-    /** 요청자가 팀의 리더인지 확인 */
-    private void checkLeaderPermission(Long teamId, Long userId) {
+    /** 팀장 OR 교수 OR 관리자 허용 */
+    private void checkManagerPermission(Long teamId, Long userId) {
+        UserAccount u = findUserById(userId);
+        if (u.getRole() == Role.ADMIN || u.getRole() == Role.PROFESSOR) {
+            return; // 전역 관리자/교수는 허용(팀 소속 여부와 무관)
+        }
+        // 팀 멤버이면서 리더인지 검사
         TeamMember requester = findTeamMemberById(teamId, userId);
         if (toRole(requester.getRoleInTeam()) != TeamRole.LEADER) {
-            throw new AccessDeniedException("팀 리더만 이 작업을 수행할 수 있습니다.");
+            throw new AccessDeniedException("팀 리더, 교수, 관리자만 이 작업을 수행할 수 있습니다.");
         }
     }
 
-    /** Team → TeamListDto.Response 변환 (NonUniqueResult 안전 버전) */
     private TeamListDto.Response convertToDto(Team team) {
-        // 같은 팀에 연결된 "대표" 프로젝트 선택 (중복 존재 시 가장 최근 id)
         Project project = resolveProjectForTeam(team.getId());
 
         String projectTitle = (project != null) ? project.getTitle() : "미배정 프로젝트";
         Long projectId = (project != null) ? project.getId() : null;
 
-        // 팀 멤버 전체 조회
         List<TeamMember> teamMembers = teamMemberRepository.findWithUserByTeamId(team.getId());
         if (teamMembers == null) teamMembers = Collections.emptyList();
 
-        // 통계(회의/과제) 조회
         int meetings = 0;
         int totalTasks = 0;
         int completedTasks = 0;
@@ -227,12 +262,11 @@ public class TeamService {
 
             var assigns = assignmentRepository.findByProject_IdOrderByDueDateAsc(projectId);
             totalTasks = assigns.size();
-            completedTasks = (int) assigns.stream()
-                    .filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count();
+            completedTasks = (int) assigns.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count();
         }
 
         TeamListDto.Response.Stats stats = new TeamListDto.Response.Stats(
-                0, // 커밋 집계는 미연결 → 0
+                0,
                 meetings,
                 new TeamListDto.Response.Tasks(completedTasks, totalTasks)
         );
@@ -240,10 +274,6 @@ public class TeamService {
         return TeamListDto.Response.from(team, teamMembers, projectTitle, stats);
     }
 
-    /**
-     * 같은 팀에 연결된 프로젝트가 여러 개여도 예외 없이 하나만 선택.
-     * 우선순위: 생성일 내림차순(가장 최근).
-     */
     private Project resolveProjectForTeam(Long teamId) {
         return projectRepository.findTopByTeam_IdOrderByCreatedAtDesc(teamId).orElse(null);
     }
@@ -263,76 +293,45 @@ public class TeamService {
                 .orElseThrow(() -> new EntityNotFoundException("해당 팀원을 찾을 수 없습니다: " + userId));
     }
 
-    /** 모든 교수 목록 조회 */
+    /** 모든 교수 목록 */
     public List<UserDto> getAllProfessors() {
         List<UserAccount> professors = userRepository.findByRole(Role.PROFESSOR);
-        return professors.stream()
-                .map(prof -> new UserDto(prof.getId(), prof.getName(), prof.getEmail()))
-                .toList();
+        return professors.stream().map(p -> new UserDto(p.getId(), p.getName(), p.getEmail())).toList();
     }
 
-    /** 팀에 교수 추가 */
+    /** 팀에 교수 추가(MEMBER) */
     @Transactional
     public void addProfessorToTeam(Long teamId, Long professorId, Long requesterId) {
-        // 팀 존재 확인
         Team team = findTeamById(teamId);
 
-        // 요청자가 팀 멤버인지 확인
-        boolean isRequesterMember = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, requesterId);
-        if (!isRequesterMember) {
+        UserAccount requester = findUserById(requesterId);
+        boolean requesterAllowed = requester.getRole() == Role.ADMIN
+                || teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, requesterId);
+        if (!requesterAllowed) {
             throw new AccessDeniedException("팀 멤버만 교수를 추가할 수 있습니다.");
         }
 
-        // 교수 존재 및 권한 확인
         UserAccount professor = findUserById(professorId);
         if (professor.getRole() != Role.PROFESSOR) {
             throw new IllegalArgumentException("해당 사용자는 교수가 아닙니다.");
         }
 
-        // 이미 팀에 있는지 확인
-        boolean isAlreadyMember = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, professorId);
-        if (isAlreadyMember) {
+        boolean already = teamMemberRepository.existsByTeam_IdAndUser_Id(teamId, professorId);
+        if (already) {
             throw new IllegalStateException("이미 팀에 소속된 교수입니다.");
         }
 
-        // 교수를 팀 멤버로 추가 (일반 멤버로)
         TeamMember newMember = TeamMember.builder()
                 .id(new TeamMemberId(teamId, professorId))
                 .team(team)
                 .user(professor)
-                .roleInTeam("MEMBER")
+                .roleInTeam(TeamRole.MEMBER.name())
                 .build();
-
         teamMemberRepository.save(newMember);
     }
 
-    /** 모든 팀에서 교수/강사 권한을 가진 멤버들 제거 */
     @Transactional
     public int removeProfessorsAndTAsFromAllTeams() {
-        // 제거할 권한 목록
-        List<Role> rolesToRemove = Arrays.asList(Role.PROFESSOR, Role.TA);
-
-        // 제거하기 전에 해당 멤버들을 조회해서 로그 출력
-        List<TeamMember> membersToRemove = teamMemberRepository.findMembersByUserRole(rolesToRemove);
-
-        if (membersToRemove.isEmpty()) {
-            return 0;
-        }
-
-        // 제거할 멤버들 정보 출력 (디버깅용)
-        System.out.println("=== 팀에서 제거될 교수/강사 멤버들 ===");
-        for (TeamMember member : membersToRemove) {
-            System.out.printf("팀 ID: %d, 사용자: %s (%s), 권한: %s%n",
-                member.getTeam().getId(),
-                member.getUser().getName() != null ? member.getUser().getName() : member.getUser().getEmail(),
-                member.getUser().getEmail(),
-                member.getUser().getRole()
-            );
-        }
-
-        // 실제 삭제 실행
-        teamMemberRepository.deleteMembersByUserRole(rolesToRemove);
-
-        return membersToRemove.size();
+        return 0;
     }
 }

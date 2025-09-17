@@ -121,9 +121,16 @@ public class DashboardService {
                 .toList();
     }
 
-    /* ========= 교수 대시보드 요약 ========= */
+    /* ========= 교수 대시보드 요약 =========
+       ➜ 교수 계정은 ‘팀 멤버십’ ∪ ‘담당 교수 배정’의 합집합으로 집계  */
     public ProfessorSummaryDto getProfessorSummary(Long professorUserId) {
-        List<Project> myProjects = projectRepository.findAllByProfessorUserId(professorUserId);
+        // A. 담당 교수인 프로젝트
+        List<Project> asProfessor = projectRepository.findAllByProfessorUserId(professorUserId);
+        // B. 팀 멤버로 속한 프로젝트
+        List<Project> asMember   = projectRepository.findAllByMemberUserId(professorUserId);
+        // C. 합집합(프로젝트 ID 기준, 앞쪽 순서 보존)
+        List<Project> myProjects = unionById(asProfessor, asMember);
+
         if (myProjects.isEmpty()) {
             return new ProfessorSummaryDto(
                     new ProfessorSummaryDto.Metrics(0, 0, 0, 0.0, 0),
@@ -133,11 +140,13 @@ public class DashboardService {
 
         List<Long> projectIds = myProjects.stream().map(Project::getId).toList();
 
+        // 과제 전부 로드 후 프로젝트별 그룹
         List<Assignment> allAssignments = assignmentRepository.findByProject_IdIn(projectIds);
         Map<Long, List<Assignment>> byProject = allAssignments.stream()
                 .collect(Collectors.groupingBy(a -> a.getProject().getId()));
 
-        int courses = myProjects.size();
+        // 메트릭 계산
+        int courses = myProjects.size(); // 표시용은 아니지만 유지
         int runningTeams = (int) myProjects.stream()
                 .map(Project::getTeam).filter(Objects::nonNull)
                 .map(Team::getId).distinct().count();
@@ -145,6 +154,7 @@ public class DashboardService {
         List<Long> teamIds = myProjects.stream()
                 .map(Project::getTeam).filter(Objects::nonNull)
                 .map(Team::getId).distinct().toList();
+
         int studentCount = teamIds.isEmpty() ? 0 :
                 (int) teamMemberRepository.countDistinctMembersByTeamIdsAndUserRole(teamIds, Role.STUDENT);
 
@@ -162,6 +172,7 @@ public class DashboardService {
 
         ZoneId zone = ZoneId.systemDefault();
 
+        // 검토 대기 목록(최대 20) — 합집합 대상의 과제 중 PENDING만
         List<ProfessorSummaryDto.PendingReviewItem> pending = allAssignments.stream()
                 .filter(a -> a.getStatus() == AssignmentStatus.PENDING)
                 .sorted(Comparator.comparing(
@@ -178,6 +189,7 @@ public class DashboardService {
                 ))
                 .toList();
 
+        // 최근 제출물(최대 10)
         List<ProfessorSummaryDto.RecentSubmission> recent = allAssignments.stream()
                 .sorted(Comparator.comparing((Assignment a) ->
                         Optional.ofNullable(a.getUpdatedAt())
@@ -195,6 +207,7 @@ public class DashboardService {
                 ))
                 .toList();
 
+        // 상위 성과 팀(최대 5) — 평균 진도 높은 순
         List<ProfessorSummaryDto.TopTeam> top = myProjects.stream()
                 .map(p -> {
                     List<Assignment> list = byProject.getOrDefault(p.getId(), List.of());
@@ -222,6 +235,15 @@ public class DashboardService {
         );
     }
 
+    /** 프로젝트 리스트 합집합(프로젝트 ID 기준, 앞쪽 리스트 우선 순서 보존) */
+    private List<Project> unionById(List<Project> a, List<Project> b) {
+        if ((a == null || a.isEmpty()) && (b == null || b.isEmpty())) return List.of();
+        Map<Long, Project> map = new LinkedHashMap<>();
+        if (a != null) for (Project p : a) map.put(p.getId(), p);
+        if (b != null) for (Project p : b) map.putIfAbsent(p.getId(), p);
+        return new ArrayList<>(map.values());
+    }
+
     private static OffsetDateTime toOffset(LocalDateTime ts, ZoneId zone) {
         if (ts == null) return null;
         return ts.atZone(zone).toOffsetDateTime();
@@ -245,7 +267,7 @@ public class DashboardService {
 
     public List<ActivityItem> getRecentActivities(int limit) {
         int size = Math.max(1, Math.min(limit, 100));
-        var events = eventRepository.findByProject_ArchivedFalseOrderByStartAtDesc(PageRequest.of(0, size));
+        var events = eventRepository.findAllActivitiesOrderByStartAtDesc(PageRequest.of(0, size));
         return events.stream().map(e -> new ActivityItem(
                 e.getId(),
                 e.getTitle(),

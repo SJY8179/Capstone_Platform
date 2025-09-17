@@ -41,7 +41,6 @@ public class TeamController {
     @GetMapping("/teaching")
     public ResponseEntity<List<TeamListDto.Response>> teaching(@AuthenticationPrincipal UserAccount user) {
         if (user.getRole() == Role.ADMIN) {
-            // 관리자는 전체 허용
             return ResponseEntity.ok(teamService.listTeams());
         }
         if (user.getRole() != Role.PROFESSOR) {
@@ -50,7 +49,7 @@ public class TeamController {
         return ResponseEntity.ok(teamService.listTeamsForProfessor(user.getId()));
     }
 
-    /** 초대 가능한 유저 **/
+    /** 초대 가능한 유저 */
     @GetMapping("/{teamId}/invitable-users")
     public ResponseEntity<List<UserDto>> getInvitableUsers(@PathVariable Long teamId) {
         return ResponseEntity.ok(teamService.findInvitableUsers(teamId));
@@ -62,7 +61,7 @@ public class TeamController {
         return ResponseEntity.ok(teamService.getAllProfessors());
     }
 
-    /** 팀에 교수 추가 */
+    /** 팀에 교수 추가 (MEMBER로만) */
     @PostMapping("/{teamId}/professors")
     public ResponseEntity<Void> addProfessorToTeam(
             @PathVariable Long teamId,
@@ -72,7 +71,7 @@ public class TeamController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    /** 팀 생성 (로그인한 사용자 = 리더) **/
+    /** 팀 생성 */
     @PostMapping
     public ResponseEntity<TeamListDto.Response> createTeam(
             @RequestBody TeamListDto.CreateRequest request,
@@ -81,13 +80,17 @@ public class TeamController {
         return ResponseEntity.status(HttpStatus.CREATED).body(newTeam);
     }
 
-    /** 팀원 초대 (팀원 권한 필요) */
+    /** 팀원 초대 */
     @PostMapping("/{teamId}/members")
     public ResponseEntity<Void> addMember(
             @PathVariable Long teamId,
             @RequestBody MemberReq request,
             @AuthenticationPrincipal UserAccount requester
     ) {
+        // 관리자만 즉시 추가 허용. 그 외는 초대 API(/teams/{id}/invitations) 사용 유도
+        if (requester.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "USE_INVITATION_FLOW");
+        }
         teamService.addMember(teamId, request.userId(), requester.getId());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
@@ -138,12 +141,10 @@ public class TeamController {
 
     /** 모든 팀에서 교수/강사 제거 (관리자 전용) */
     @DeleteMapping("/cleanup/professors-and-tas")
-    public ResponseEntity<String> removeProfessorsAndTAs(@AuthenticationPrincipal UserAccount requester) {
-        // 관리자만 실행 가능
+    public ResponseEntity<String> removeProfessorsAndTAsFromAllTeams(@AuthenticationPrincipal UserAccount requester) {
         if (requester.getRole() != Role.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "관리자만 실행할 수 있습니다.");
         }
-
         int removedCount = teamService.removeProfessorsAndTAsFromAllTeams();
         return ResponseEntity.ok(String.format("팀에서 %d명의 교수/강사가 제거되었습니다.", removedCount));
     }

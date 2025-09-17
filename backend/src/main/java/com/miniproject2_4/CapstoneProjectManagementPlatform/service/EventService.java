@@ -46,10 +46,13 @@ public class EventService {
         Project prj = projectRepository.findById(projectId)
                 .orElseThrow(() -> new EntityNotFoundException("프로젝트가 존재하지 않습니다. id=" + projectId));
 
+        LocalDateTime start = parseDateTime(startAtIso);
+        if (start == null) start = LocalDateTime.now(); // start_at NOT NULL 보호
+
         Event e = new Event();
         e.setProject(prj);
         e.setTitle(title == null ? "" : title);
-        e.setStartAt(parseDateTime(startAtIso));
+        e.setStartAt(start);
         e.setEndAt(parseDateTime(endAtIso)); // 빈문자/널 → null
         e.setType(type == null ? EventType.MEETING : type);
         e.setLocation((location == null || location.isBlank()) ? null : location);
@@ -66,7 +69,11 @@ public class EventService {
         }
 
         if (title != null) e.setTitle(title);
-        if (startAtIso != null) e.setStartAt(parseDateTime(startAtIso));
+        if (startAtIso != null) {
+            LocalDateTime start = parseDateTime(startAtIso);
+            if (start == null) start = e.getStartAt() != null ? e.getStartAt() : LocalDateTime.now();
+            e.setStartAt(start);
+        }
         if (endAtIso != null) e.setEndAt(parseDateTime(endAtIso));
         if (type != null) e.setType(type);
         if (location != null) e.setLocation(location.isBlank() ? null : location);
@@ -84,27 +91,27 @@ public class EventService {
         eventRepository.delete(e);
     }
 
+    /**
+     * 시스템 활동 로깅 (팀/프로젝트 생성/삭제 등)
+     * ⚠ projectId가 없으면 event(project_id NOT NULL 제약) 삽입을 **스킵**한다.
+     */
     @Transactional
-    public void logSystemActivity(String message, Long projectId) {
-        if (projectId == null || message == null || message.isBlank()) {
+    public void logSystemActivity(String title, Long projectId) {
+        if (projectId == null) {
+            // 팀 생성 단계 등에서는 프로젝트가 아직 없으므로 기록하지 않음
             return;
         }
-
         Project project = projectRepository.findById(projectId).orElse(null);
-        if (project == null) {
-            return;
-        }
+        if (project == null) return;
 
-        Event systemEvent = Event.builder()
-                .project(project)
-                .title(message)
-                .startAt(LocalDateTime.now())
-                .endAt(null)
-                .type(EventType.ETC)
-                .location("시스템")
-                .build();
+        Event e = new Event();
+        e.setProject(project);
+        e.setTitle(title == null ? "system" : title);
+        e.setStartAt(LocalDateTime.now());
+        e.setType(EventType.ETC); // ENUM 안전값
+        e.setLocation(null);
 
-        eventRepository.save(systemEvent);
+        eventRepository.save(e);
     }
 
     /** "yyyy-MM-ddTHH:mm:ss" | Offset | Instant | "yyyy-MM-dd" 지원 */

@@ -1,0 +1,25 @@
+### ========= 공통 =========
+@host = http://localhost:8080/api
+@ts = {{$timestamp}}
+@teamName_prof = SMOKE-TEAM-PROF-{{ts}}
+
+### 교수 로그인
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "prof1@a.com", "password": "111111" }
+> {%
+    let d = response.body; if (typeof d === 'string') { try { d = JSON.parse(d) } catch(e) {} }
+    client.global.set("profToken", d.accessToken);
+%}
+
+### 교수: 팀 생성(교수는 자동 멤버 추가 안 됨) — 2xx 기대
+POST {{host}}/teams
+Authorization: Bearer {{profToken}}
+Content-Type: application/json
+
+{ "name": "{{teamName_prof}}", "description": "prof smoke" }
+
+### 교수: 내가 속한 프로젝트(초대 받기 전이면 보통 빈 배열)
+GET {{host}}/projects/my
+Authorization: Bearer {{profToken}}

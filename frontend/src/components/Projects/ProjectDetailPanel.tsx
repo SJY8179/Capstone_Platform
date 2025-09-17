@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { getProjectDetail, updateProjectRepo } from "@/api/projects";
 import type { ProjectDetailDto, ProjectOverviewDto } from "@/types/domain";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Timer,
   AlertCircle,
+  UserPlus,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,7 +44,9 @@ import {
 
 /* 파일 미리보기/아이콘 */
 import { FileThumb } from "@/components/files/FileThumb";
-import { FileIcon } from "@/components/files/FileIcon";
+
+/* 담당 교수 요청 다이얼로그 */
+import { RequestProfessorDialog } from "@/components/Projects/RequestProfessorDialog";
 
 /* ------------------------------------------------
  * 권한 타입 및 조회 함수
@@ -102,10 +105,22 @@ const TASK_BADGE: Record<
   pending: { label: "대기", variant: "outline" },
 };
 
+type InnerTab = "overview" | "work" | "risks" | "decisions" | "files";
+
 /* ------------------------------------------------
  * 메인 컴포넌트
  * ----------------------------------------------*/
-export default function ProjectDetailPanel({ projectId }: { projectId: number }) {
+export default function ProjectDetailPanel({
+  projectId,
+  initialTab,
+  forceEdit,
+}: {
+  projectId: number;
+  /** 최초로 열 탭 (미지정 시 'overview') */
+  initialTab?: InnerTab | string | null;
+  /** true면 개요서 textarea에 자동 포커스 */
+  forceEdit?: boolean;
+}) {
   const { user, me } = useAuth();
 
   useEffect(() => {
@@ -120,13 +135,35 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const [tab, setTab] =
-    useState<"overview" | "work" | "risks" | "decisions" | "files">("overview");
+  // 초깃값: props.initialTab 우선
+  const initialTabNormalized: InnerTab =
+    (["overview", "work", "risks", "decisions", "files"].includes(
+      String(initialTab ?? "").toLowerCase()
+    )
+      ? (String(initialTab).toLowerCase() as InnerTab)
+      : "overview");
+
+  const [tab, setTab] = useState<InnerTab>(initialTabNormalized);
+
+  // props 변경 시 탭 동기화(드물지만 안전하게)
+  useEffect(() => {
+    const next: InnerTab =
+      (["overview", "work", "risks", "decisions", "files"].includes(
+        String(initialTab ?? "").toLowerCase()
+      )
+        ? (String(initialTab).toLowerCase() as InnerTab)
+        : "overview");
+    setTab(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab]);
 
   const [overview, setOverview] = useState<ProjectOverviewDto | null>(null);
   const [docs, setDocs] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [decisions, setDecisions] = useState<any[]>([]);
+
+  // 담당 교수 요청 다이얼로그
+  const [reqOpen, setReqOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -203,6 +240,10 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
     setData(updated);
   };
 
+  // 학생/관리자(혹은 팀 멤버)에게만 ‘담당 교수 요청’ 버튼 제공 (현재 미지정일 때)
+  const canRequestProfessor =
+    !data.professor && (perms?.isAdmin || perms?.isMember);
+
   return (
     <div className="space-y-6 min-w-0">
       {/* 헤더 */}
@@ -219,11 +260,23 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
               <Users className="h-4 w-4" />
               {data.team?.name ?? "N/A"}
             </span>
-            {data.professor && (
+            {data.professor ? (
               <span className="inline-flex items-center gap-1 mr-3">
                 <User className="h-4 w-4" />
                 {data.professor.name} ({data.professor.email})
               </span>
+            ) : (
+              canRequestProfessor && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mr-3"
+                  onClick={() => setReqOpen(true)}
+                >
+                  <UserPlus className="h-4 w-4 mr-1" />
+                  담당 교수 요청
+                </Button>
+              )
             )}
             {data.updatedAt && (
               <span className="inline-flex items-center gap-1">
@@ -234,17 +287,19 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
           </p>
         </div>
 
-        {data.repo?.url && (
-          <a
-            className="inline-flex items-center gap-1 text-sm underline underline-offset-4"
-            href={data.repo.url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <GitBranch className="h-4 w-4" />
-            GitHub
-          </a>
-        )}
+        <div className="shrink-0 flex items-center gap-2">
+          {data.repo?.url && (
+            <a
+              className="inline-flex items-center gap-1 text-sm underline underline-offset-4"
+              href={data.repo.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <GitBranch className="h-4 w-4" />
+              GitHub
+            </a>
+          )}
+        </div>
       </div>
 
       {/* 진행률 */}
@@ -257,7 +312,7 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
       </div>
 
       {/* 서브 탭 */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="min-w-0">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as InnerTab)} className="min-w-0">
         <TabsList>
           <TabsTrigger value="overview">개요서</TabsTrigger>
           <TabsTrigger value="work">작업</TabsTrigger>
@@ -274,6 +329,8 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
             canPublish={canPublish}
             canRequestReview={canRequestReview}
             onOverviewChange={setOverview}
+            /** forceEdit이면 자동 포커스 */
+            autoFocus={!!forceEdit}
           />
         </TabsContent>
 
@@ -312,6 +369,14 @@ export default function ProjectDetailPanel({ projectId }: { projectId: number })
           />
         </TabsContent>
       </Tabs>
+
+      {/* 담당 교수 요청 다이얼로그 */}
+      <RequestProfessorDialog
+        open={reqOpen}
+        onOpenChange={setReqOpen}
+        projectId={projectId}
+        teamId={data.team?.id ?? null}
+      />
     </div>
   );
 }
@@ -327,15 +392,19 @@ const OverviewSection = memo(function OverviewSection({
   canPublish,
   canRequestReview,
   onOverviewChange,
+  autoFocus = false,
 }: {
   projectId: number;
   overview: ProjectOverviewDto | null;
   canPublish: boolean;
   canRequestReview: boolean;
   onOverviewChange: (next: ProjectOverviewDto) => void;
+  /** true면 textarea 자동 포커스 */
+  autoFocus?: boolean;
 }) {
   const [text, setText] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const hasPending =
     !!overview?.pendingMarkdown && (overview.pendingMarkdown ?? "").length > 0;
@@ -349,6 +418,14 @@ const OverviewSection = memo(function OverviewSection({
     overview?.updatedAt,
     overview?.version,
   ]);
+
+  // forceEdit=true일 때 자동 포커스
+  useEffect(() => {
+    if (!autoFocus) return;
+    // 탭 전환/모달 오픈 타이밍 고려해서 마이크로 딜레이
+    const t = setTimeout(() => textareaRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [autoFocus]);
 
   const reloadOverview = async () => {
     const fresh = await getOverview(projectId);
@@ -455,6 +532,7 @@ const OverviewSection = memo(function OverviewSection({
         </CardHeader>
         <CardContent>
           <textarea
+            ref={textareaRef}
             className="w-full min-h[200px] min-h-[200px] border rounded-md bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             placeholder="프로젝트 배경, 목표, 범위, 이해관계자, 핵심 기능, 비기능 요구사항, 성공 기준 등을 Markdown으로 작성하세요."
             value={text}

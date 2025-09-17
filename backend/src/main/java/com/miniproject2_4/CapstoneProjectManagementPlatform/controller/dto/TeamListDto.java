@@ -47,7 +47,7 @@ public final class TeamListDto {
             String lastActivity
     ) {
         public record Person(String name, String email, String avatar) {}
-        public record Member(Long id, String name, String email, String avatar, String role, String status) {}
+        public record Member(Long id, String name, String email, String avatar, String role, String status, String userRole) {}
         public record Stats(int commits, int meetings, Tasks tasks) {}
         public record Tasks(int completed, int total) {}
 
@@ -74,7 +74,8 @@ public final class TeamListDto {
                             tm.getUser().getEmail(),
                             tm.getUser().getAvatarUrl(),
                             "LEADER".equalsIgnoreCase(tm.getRoleInTeam()) ? "leader" : "member",
-                            "active"
+                            "active",
+                            tm.getUser().getRole().name()
                     ))
                     .toList();
 

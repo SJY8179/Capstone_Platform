@@ -38,4 +38,12 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     /** 추가: 전 프로젝트 대상 최신 활동 (관리자 대시보드) */
     List<Event> findByProject_ArchivedFalseOrderByStartAtDesc(Pageable pageable);
+
+    /** 시스템 활동 포함한 최신 활동 조회 (project가 null일 수 있음) */
+    @Query("""
+        select e from Event e
+        where e.project is null or e.project.archived = false
+        order by e.startAt desc
+    """)
+    List<Event> findAllActivitiesOrderByStartAtDesc(Pageable pageable);
 }

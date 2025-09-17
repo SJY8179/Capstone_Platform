@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { useEffect, useMemo, useState } from "react";
+﻿﻿import { useEffect, useMemo, useState } from "react";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
-  Search, Plus, FileText, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
+  Search, Plus, CalendarDays, Users, GitBranch, Eye, Edit, MessageSquare,
   Archive, RotateCcw, Trash2, MoreHorizontal,
 } from "lucide-react";
 import type { UserRole } from "@/types/user";
@@ -54,6 +54,32 @@ function formatK(date?: string | null) {
   });
 }
 
+/** 멤버 표시 문자열: 팀원/조교/교수/관리자 섹션으로 그룹화 */
+function buildMemberLine(members?: ProjectListDto["members"]) {
+  if (!members || members.length === 0) return "-";
+
+  const profs: string[] = [];
+  const admins: string[] = [];
+  const tas: string[] = [];
+  const studentsOrOthers: string[] = [];
+
+  for (const m of members) {
+    const role = (m.userRole ?? "").toUpperCase();
+    if (role === "PROFESSOR") profs.push(m.name);
+    else if (role === "ADMIN") admins.push(m.name);
+    else if (role === "TA") tas.push(m.name);
+    else studentsOrOthers.push(m.name); // STUDENT 또는 미지정
+  }
+
+  const parts: string[] = [];
+  if (studentsOrOthers.length) parts.push(`팀원 : ${studentsOrOthers.join(", ")}`);
+  if (tas.length) parts.push(`조교 : ${tas.join(", ")}`);
+  if (profs.length) parts.push(`교수 : ${profs.join(", ")}`);
+  if (admins.length) parts.push(`관리자 : ${admins.join(", ")}`);
+
+  return parts.join(" | ");
+}
+
 interface ProjectManagementProps {
   userRole: UserRole;
 }
@@ -91,13 +117,11 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   const [purgeProject, setPurgeProject] = useState<ProjectListDto | null>(null);
 
   const handleProjectCreated = (newProject: ProjectListDto) => {
-    // 새 프로젝트를 목록에 추가 (맨 앞에 추가)
     setProjects(prev => [newProject, ...prev]);
   };
 
   const handleCreateProjectClick = async () => {
     try {
-      // 팀 목록 확인
       const teams = await listTeams();
       if (teams.length === 0) {
         toast.error("프로젝트를 생성하려면 먼저 팀을 생성해야 합니다.", {
@@ -105,7 +129,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         });
         return;
       }
-      // 팀이 있으면 모달 열기
       setShowCreateModal(true);
     } catch (error) {
       console.error("팀 목록 확인 실패:", error);
@@ -167,7 +190,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       return name.includes(q) || team.includes(q) || memberNames.some((n) => n.includes(q));
     };
 
-    // Choose data source based on tab
     let sourceProjects: ProjectListDto[];
     if (tab === "archived") {
       sourceProjects = archivedProjects;
@@ -185,7 +207,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     return sorted.filter(bySearch);
   }, [projects, archivedProjects, searchQuery, tab]);
 
-  /** 🔗 GitHub 버튼: 링크가 있으면 새 탭, 없으면 안내 토스트 */
+  /** 🔗 GitHub 버튼 */
   const openGithub = async (projectId: number) => {
     try {
       const detail = await getProjectDetail(projectId);
@@ -205,36 +227,25 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     }
   };
 
-  /** '보고서 작성' 퀵 액션 (관리자/교수 등에서 사용 가능) */
+  /** ‘빠른 편집’(관리자 전용) */
   const quickWriteReport = (projectId: number) => {
     setDetailProjectId(projectId);
     setDetailIntent({ tab: "overview", edit: true });
   };
 
-  /** Handle successful archive/restore/purge operations */
+  /** Handle archive/restore/purge */
   const handleProjectArchived = (projectId: number) => {
-    // Remove from active projects and add to archived
     setProjects(prev => prev.filter(p => p.id !== projectId));
-    // Refresh archived list if it's loaded
-    if (archivedProjects.length > 0) {
-      setArchivedProjects([]); // Force reload on next view
-    }
+    if (archivedProjects.length > 0) setArchivedProjects([]); // 다음 진입 시 재로딩
   };
 
   const handleProjectRestored = async (projectId: number) => {
     try {
       await restoreProject(projectId);
-
-      // Remove from archived projects
       setArchivedProjects(prev => prev.filter(p => p.id !== projectId));
-
-      // Refresh active projects list
       const data = await listProjects({ isAdmin });
       setProjects(data ?? []);
-
-      // Switch to "all" tab to show the restored project
       setTab("all");
-
       toast.success("프로젝트가 복원되었습니다.", {
         description: "복원된 프로젝트를 확인하려면 전체 탭을 확인하세요.",
       });
@@ -245,7 +256,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
   };
 
   const handleProjectPurged = (projectId: number) => {
-    // Remove from archived projects
     setArchivedProjects(prev => prev.filter(p => p.id !== projectId));
   };
 
@@ -253,7 +263,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
     const isArchived = tab === "archived";
 
     if (isArchived) {
-      // Actions for archived projects
       return (
         <div className="flex gap-2">
           <Button
@@ -282,6 +291,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
         </div>
       );
     }
+
     // Actions for active projects
     const commonActions = (
       <>
@@ -306,14 +316,6 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
       return (
         <div className="flex gap-2">
           {commonActions}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => quickWriteReport(p.id)}
-          >
-            <FileText className="h-4 w-4 mr-1" />
-            보고서 작성
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline">
@@ -523,7 +525,7 @@ export function ProjectManagement({ userRole }: ProjectManagementProps) {
 
                       <span className="inline-flex items-center gap-1 text-muted-foreground">
                         <Users className="h-4 w-4" />
-                        팀원: {(p.members ?? []).map((m) => m.name).join(", ") || "-"}
+                        {buildMemberLine(p.members)}
                       </span>
                     </div>
                   </CardContent>

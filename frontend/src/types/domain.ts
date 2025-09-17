@@ -6,6 +6,8 @@ export interface CreateProjectRequest {
   title: string;
   description?: string;
   teamId: number; // 기존 팀 선택 (필수)
+  /** 선택: 담당 교수 지정 (없어도 생성 가능) */
+  professorId?: number;
 }
 
 export interface ProjectListDto {
@@ -16,7 +18,8 @@ export interface ProjectListDto {
   team: string;
   lastUpdate: string;          // ISO
   progress: number;            // 0~100
-  members: { id: number; name: string }[];
+  /** 멤버에 전역 역할(userRole) 포함 */
+  members: { id: number; name: string; userRole?: "STUDENT" | "TA" | "PROFESSOR" | "ADMIN" }[];
   milestones: { completed: number; total: number };
   nextDeadline: { task: string; date: string } | null;
 }
@@ -109,6 +112,7 @@ export interface TeamListDto {
     avatar?: string;
     role: "leader" | "member";
     status: "active" | "inactive";
+    userRole: "STUDENT" | "TA" | "PROFESSOR" | "ADMIN"; // 명확한 유니온
   }[];
   stats: {
     commits: number;
@@ -119,7 +123,7 @@ export interface TeamListDto {
   lastActivity?: string | null;
 }
 
-/** ✅ 공용 사용자 DTO (Invite 모달 등에서 사용) */
+/** 공용 사용자 DTO (Invite 모달 등에서 사용) */
 export interface UserDto {
   id: number;
   name: string;
@@ -265,16 +269,19 @@ export interface BulkReviewResult {
 }
 
 /** ====== Notifications (프론트 집계형) ====== */
-export type NotificationType = "commit" | "feedback" | "schedule" | "team" | "assignment" | "system";
+export type NotificationType =
+  | "commit" | "feedback" | "schedule" | "team" | "assignment" | "system"
+  | "team_invitation" | "invitation_accepted" | "invitation_declined";
+
 export type NotificationPriority = "low" | "medium" | "high";
 
-/** App 전역에서 사용하는 알림 모델(프론트 집계 결과) */
+/** App 전역에서 사용하는 알림 모델(프론트 집계 결과 + 서버 알림 공통) */
 export interface AppNotification {
   id: string;
   type: NotificationType;
   title: string;
   message: string;
-  /** ISO 문자열 (저장/정렬 일관성 위해 Date 대신 ISO 사용) */
+  /** ISO 문자열 */
   timestamp: string;
   read: boolean;
   priority: NotificationPriority;
@@ -282,4 +289,5 @@ export interface AppNotification {
   author?: { name: string; avatar?: string };
   projectId?: number;
   projectName?: string | null;
+  payload?: any;
 }
