@@ -1,0 +1,67 @@
+# === Project docs ===
+HELP.md
+
+# === Java / Maven / Gradle build ===
+target/
+build/
+backend/target/
+backend/uploads/
+uploads/
+backend/build/
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# === Frontend build/cache ===
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+node_modules/
+dist/
+.vite/
+coverage/
+
+# === Logs ===
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# === IDEs / OS ===
+.idea/
+backend/.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.iws
+*.iml
+*.ipr
+
+# === Spring Tool Suite (STS) ===
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# === NetBeans ===
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# === Temp ===
+.trash/
+
+# === Local secrets (반드시 ignore) ===
+backend/src/main/resources/application-local.properties
+
+# === Claude Code settings ===
+.claude/
+prompt.txt

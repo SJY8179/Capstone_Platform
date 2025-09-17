@@ -1,0 +1,20 @@
+name: frontend-ci
+on:
+  pull_request:
+    paths: [ "frontend/**" ]
+  push:
+    branches: [ main, moinji_merge ]
+    paths: [ "frontend/**" ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install & build
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm run build
