@@ -1,0 +1,73 @@
+### 교수 로그인 (담당 교수: protest@prof.com → projectId=1)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{ "email": "protest@prof.com", "password": "000000" }
+
+> {% client.global.set("token_prof", response.body.accessToken); %}
+
+### 교수: 생성 성공 (projectId=1)
+POST http://localhost:8080/api/projects/1/events
+Authorization: Bearer {{token_prof}}
+Content-Type: application/json
+
+{
+  "title": "교수 생성 성공 케이스",
+  "startAtIso": "2025-09-22T09:00:00",
+  "endAtIso": "2025-09-22T10:00:00",
+  "type": "MEETING",
+  "location": "온라인"
+}
+
+### 관리자 로그인 (admin@a.com)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{ "email": "admin@a.com", "password": "111111" }
+
+> {% client.global.set("token_admin", response.body.accessToken); %}
+
+### 관리자: 어디서나 생성 성공 (projectId=1)
+POST http://localhost:8080/api/projects/1/events
+Authorization: Bearer {{token_admin}}
+Content-Type: application/json
+
+{
+  "title": "관리자 생성 성공 케이스",
+  "startAtIso": "2025-09-22T11:00:00"
+}
+
+### 학생(비팀원) 로그인 (예: test2@aa.com → team_member에 없음)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{ "email":"test2@aa.com", "password":"654321" }
+
+> {% client.global.set("token_student_non", response.body.accessToken); %}
+
+### 학생(비팀원): 생성 실패 → 403 + code=NOT_PROJECT_MEMBER
+POST http://localhost:8080/api/projects/1/events
+Authorization: Bearer {{token_student_non}}
+Content-Type: application/json
+
+{ "title":"학생 비팀원 생성 실패", "startAtIso":"2025-09-22T09:00:00" }
+
+### (선택) 학생(팀원) 로그인
+### team_member 테이블에 포함된 사용자 계정 자격증명을 넣어 테스트하세요.
+### 예시:
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email":"test@a.com",
+  "password":"123456"
+}
+
+> {% client.global.set("token_student_mem", response.body.accessToken); %}
+
+### (선택) 학생(팀원): 생성 성공 기대
+POST http://localhost:8080/api/projects/1/events
+Authorization: Bearer {{token_student_mem}}
+Content-Type: application/json
+
+{ "title":"학생 팀원 생성 성공", "startAtIso":"2025-09-22T13:00:00" }
