@@ -1,21 +1,36 @@
 name: backend-ci
+
 on:
   pull_request:
-    paths: [ "backend/**" ]
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
   push:
-    branches: [ main, moinji_merge ]
-    paths: [ "backend/**" ]
+    branches: [ main, moinji_premerge ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
+          cache: maven
+
+      - name: Make mvnw executable
+        run: chmod +x mvnw
+
       - name: Build backend
-        working-directory: backend
-        run: |
-          - name: Build backend
-          run: mvn -f backend/pom.xml clean package
+        run: ./mvnw -B -ntp -DskipTests package
