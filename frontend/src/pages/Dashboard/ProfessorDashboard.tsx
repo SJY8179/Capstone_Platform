@@ -48,6 +48,7 @@ import {
 } from "@/api/professorRequests";
 import { scheduleBus } from "@/lib/schedule-bus";
 import { CreateProjectModal } from "@/components/Projects/CreateProjectModal";
+import { EventEditor } from "@/components/Schedule/EventEditor";
 import type { ProjectListDto } from "@/types/domain";
 
 const TEXTS = {
@@ -134,6 +135,8 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [recentTab, setRecentTab] = useState<RecentTab>("ALL");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [eventEditorOpen, setEventEditorOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(undefined);
 
   // 메모 입력 다이얼로그
   const [memoOpen, setMemoOpen] = useState(false);
@@ -459,11 +462,15 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
           <Button
             size="sm"
             onClick={() => {
-              if (!projectId) {
-                toast.info("프로젝트 참여가 필요합니다.");
+              // 교수가 담당하는 프로젝트가 있는지 확인
+              const projectCount = metrics?.courses ?? 0;
+              if (projectCount === 0) {
+                toast.info("프로젝트를 먼저 생성하거나 담당 교수로 배정받아야 합니다.");
                 setNeedProjectOpen(true);
               } else {
-                // 프로젝트가 지정되어 있다면, 일정 관리로 보내는 로직을 후속으로 연결할 수 있습니다.
+                // EventEditor에서 프로젝트를 선택할 수 있도록 projectId 없이 열기
+                setSelectedProjectId(projectId);
+                setEventEditorOpen(true);
               }
             }}
           >
@@ -994,6 +1001,17 @@ export function ProfessorDashboard({ projectId }: ProfessorDashboardProps) {
         onOpenChange={setCreateProjectOpen}
         onSuccess={(newProject: ProjectListDto) => {
           toast.success("프로젝트가 생성되었습니다!");
+          refreshAll();
+        }}
+      />
+
+      {/* 일정 추가 모달 */}
+      <EventEditor
+        open={eventEditorOpen}
+        onOpenChange={setEventEditorOpen}
+        projectId={selectedProjectId}
+        onSaved={() => {
+          toast.success("일정이 추가되었습니다!");
           refreshAll();
         }}
       />
